@@ -1,0 +1,68 @@
+#!/bin/bash
+# Block / unblock an IP in the Quickshell firewall (sets blocked4 / blocked6
+# of table inet qs_firewall, see qs-firewall.nft). Installed to
+# /usr/local/sbin/qs-fw-block and run password-less through sudo by the bar
+# (Services/FwBlock.qml), so it only does this one job and checks its input:
+#
+#   qs-fw-block add <ip> <minutes>    (1..10080)
+#   qs-fw-block del <ip>
+#   qs-fw-block list                  → "<ip> <seconds left>" per line
+#
+# Refuses loopback, this PC's own addresses and the default gateways (blocking
+# the router would also drop its DNS/DHCP replies).
+set -euo pipefail
+PATH=/usr/bin
+T="inet qs_firewall"
+
+die() { echo "qs-fw-block: $*" >&2; exit 1; }
+
+# Prints 4 or 6 for a plain IP address; anything else fails. The IP ends up
+# inside an nft command, so only digits, dots, hex and colons get through.
+family() {
+    local ip=$1 o
+    if [[ $ip =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]]; then
+        for o in "${BASH_REMATCH[@]:1}"; do (( 10#$o <= 255 )) || return 1; done
+        echo 4
+    elif [[ ${#ip} -le 39 && $ip =~ ^[0-9a-fA-F:]+$ && $ip == *:*:* ]]; then
+        echo 6
+    else
+        return 1
+    fi
+}
+
+protected() {
+    local ip=$1
+    [[ $ip =~ ^(127\.|0\.) || $ip == ::1 || $ip == :: ]] && return 0
+    ip -o addr show | awk '{split($4, a, "/"); print a[1]}' | grep -qxiF -- "$ip" && return 0
+    { ip route show default; ip -6 route show default; } 2>/dev/null |
+        awk '$2 == "via" {print $3}' | grep -qxiF -- "$ip" && return 0
+    return 1
+}
+
+case "${1:-}" in
+    add)
+        [[ $# -eq 3 ]] || die "usage: add <ip> <minutes>"
+        f=$(family "$2") || die "not an IP address"
+        [[ $3 =~ ^[0-9]{1,5}$ ]] && (( 10#$3 >= 1 && 10#$3 <= 10080 )) || die "minutes must be 1..10080"
+        protected "$2" && die "$2 is this PC or its router, not blocking it"
+        # Already there: replace, so the new timeout counts from now
+        nft delete element $T blocked$f "{ $2 }" 2>/dev/null || true
+        nft add element $T blocked$f "{ $2 timeout $((10#$3))m }"
+        # Drop its open connections too (they'd otherwise linger in conntrack)
+        conntrack -D -s "$2" >/dev/null 2>&1 || true
+        logger -t qs-fw-block -p auth.notice "blocked $2 for $((10#$3)) min"
+        ;;
+    del)
+        [[ $# -eq 2 ]] || die "usage: del <ip>"
+        f=$(family "$2") || die "not an IP address"
+        nft delete element $T blocked$f "{ $2 }" 2>/dev/null || true
+        logger -t qs-fw-block -p auth.notice "unblocked $2"
+        ;;
+    list)
+        for f in 4 6; do
+            nft -j list set $T blocked$f 2>/dev/null |
+                jq -r '.nftables[] | select(.set) | .set.elem[]? | .elem | "\(.val) \(.expires // 0)"'
+        done
+        ;;
+    *) die "usage: add <ip> <minutes> | del <ip> | list" ;;
+esac

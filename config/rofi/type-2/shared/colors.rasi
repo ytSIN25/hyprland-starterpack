@@ -1,0 +1,3 @@
+/* Colors come from the wallpaper theme (Quickshell writes colors/quickshell.rasi).
+   Old scheme: colors/gruvbox-material.rasi */
+@import "~/.config/rofi/type-2/colors/quickshell.rasi"

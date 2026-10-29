@@ -1,0 +1,15 @@
+[Unit]
+Description=Restore the custom fan curve set in the Quickshell battery panel
+# The Legion embedded controller resets its fan table on reboot and often on
+# resume, so re-apply the last saved curve at boot and after every sleep.
+After=systemd-modules-load.service suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
+
+[Service]
+Type=oneshot
+ExecStartPre=-/usr/bin/modprobe legion_laptop
+# Give the controller a moment to settle after waking up.
+ExecStartPre=/usr/bin/sleep 2
+ExecStart=/usr/local/sbin/quickshell-fan-curve restore
+
+[Install]
+WantedBy=multi-user.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target

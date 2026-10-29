@@ -1,0 +1,136 @@
+// ~/.config/waybar/config.jsonc
+{
+    "layer": "top",
+    "position": "top",
+    "height": 34,
+    "margin-top": 8,
+    "margin-left": 14,
+    "margin-right": 14,
+    "spacing": 0,
+
+    "modules-left": [
+        "custom/arch",
+        "hyprland/workspaces",
+        "hyprland/window",
+        "tray"
+    ],
+    "modules-center": ["clock"],
+    "modules-right": [
+        "group/hardware",
+        "group/connectivity",
+        "idle_inhibitor",
+        "custom/clipboard",
+        "custom/notification"
+    ],
+
+    "custom/arch": {
+        "format": "󰣇",
+        "tooltip": false,
+        "on-click": "rofi -show drun"
+    },
+
+    "hyprland/workspaces": {
+        "format": "{icon}",
+        "on-click": "activate",
+        "persistent-workspaces": {
+            "*": 4
+        },
+        "format-icons": {
+            "empty": "●"
+        }
+    },
+
+    "hyprland/window": {
+        "format": "󰖯  {title}",
+        "max-length": 30,
+        "separate-outputs": true
+    },
+
+    "tray": {
+        "icon-size": 16,
+        "spacing": 10
+    },
+
+    "clock": {
+        "format": "  {:%H:%M}  |  {:%a %d %b}",
+        "format-alt": "  {:%Y-%m-%d %H:%M:%S}",
+        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>",
+        "on-click": "mode"
+    },
+
+    "group/hardware": {
+        "orientation": "horizontal",
+        "modules": ["cpu", "memory"]
+    },
+    "cpu": {
+        "format": "󰍛  {usage}%",
+        "interval": 2,
+        "on-click": "kitty -e btop"
+    },
+    "memory": {
+        "format": "|  󰋊  {percentage}%",
+        "interval": 2,
+        "on-click": "kitty -e btop"
+    },
+
+    "group/connectivity": {
+        "orientation": "horizontal",
+        "modules": ["network", "bluetooth", "pulseaudio"]
+    },
+    "network": {
+        "format-wifi": "",
+        "format-ethernet": "󰈀",
+        "format-disconnected": "󰤭",
+        "tooltip-format-wifi": "{essid} ({signalStrength}%)\n{ipaddr}/{cidr}",
+        "on-click": "kitty -e nmtui"
+    },
+    "bluetooth": {
+        "format": "",
+        "format-connected": "",
+        "format-disabled": "",
+        "tooltip-format": "{controller_alias}\t{controller_address}",
+        "tooltip-format-connected": "{controller_alias}\t{controller_address}\n\n{device_enumerate}",
+        "on-click": "blueman-manager"
+    },
+    "pulseaudio": {
+        "format": "{icon}",
+        "format-muted": "",
+        "format-icons": {
+            "default": ["", "", ""]
+        },
+        "tooltip-format": "{volume}%",
+        "on-click": "pavucontrol",
+        "scroll-step": 5
+    },
+
+    "idle_inhibitor": {
+        "format": "{icon}",
+        "format-icons": {
+            "activated": "",
+            "deactivated": ""
+        }
+    },
+
+    "custom/clipboard": {
+        "format": "",
+        "tooltip": false,
+        "on-click": "cliphist list | rofi -dmenu | cliphist decode | wl-copy"
+    },
+
+    "custom/notification": {
+        "tooltip": false,
+        "format": "{icon}",
+        "format-icons": {
+            "notification": "",
+            "none": "",
+            "dnd-notification": "",
+            "dnd-none": ""
+        },
+        "return-type": "json",
+        "exec-if": "which swaync-client",
+        "exec": "swaync-client -swb",
+        "on-click": "swaync-client -t -sw",
+        "on-click-right": "swaync-client -d -sw",
+        "escape": true
+    }
+}

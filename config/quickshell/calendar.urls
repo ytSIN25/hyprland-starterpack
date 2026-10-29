@@ -1,0 +1,4 @@
+# Calendarios para la dynamic island (scripts/island-calendar.py).
+# Una URL iCal o ruta a .ics por línea. Google Calendar:
+#   Ajustes → (tu calendario) → "Dirección secreta en formato iCal"
+# https://calendar.google.com/calendar/ical/.../basic.ics

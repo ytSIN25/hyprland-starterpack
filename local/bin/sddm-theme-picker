@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Pick the SDDM login wallpaper (Super+Shift+W), styled like the app launcher.
+# Also copies the current launcher colours into the login theme.
+# Theme source: ~/.config/sddm-launcher (install once with its install.sh)
+
+walls="$HOME/.config/wallpapers"
+theme=/usr/share/sddm/themes/launcher
+rasi="$HOME/.config/rofi/type-2/quickshell.rasi"
+colors="$HOME/.config/rofi/type-2/colors/quickshell.rasi"
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/sddm-picker"
+mkdir -p "$cache"
+
+if [[ ! -w "$theme/background.jpg" ]]; then
+    notify-send -a "Login theme" "Login theme not installed" \
+        "Run: sudo ~/.config/sddm-launcher/install.sh"
+    exit 1
+fi
+
+pkill -x rofi && exit 0
+
+# Thumbnail (first frame for videos/gifs), cached by mtime
+thumb() {
+    local f="$1" t vf="scale=320:180:force_original_aspect_ratio=increase,crop=320:180"
+    t="$cache/$(stat -c '%Y' "$f")-$(printf '%s' "${f##*/}" | md5sum | cut -c1-12).jpg"
+    [[ -s "$t" ]] \
+        || ffmpeg -loglevel error -y -ss 0.3 -i "$f" -frames:v 1 -vf "$vf" -q:v 4 "$t" </dev/null \
+        || ffmpeg -loglevel error -y -i "$f" -frames:v 1 -vf "$vf" -q:v 4 "$t" </dev/null
+    printf '%s' "$t"
+}
+
+mapfile -t files < <(find "$walls" -maxdepth 1 -type f \
+    -iregex '.*\.\(jpe?g\|png\|webp\|gif\|mp4\|webm\|mkv\|mov\|m4v\)' | sort)
+[[ ${#files[@]} -gt 0 ]] || { notify-send -a "Login theme" "No wallpapers in $walls"; exit 1; }
+
+choice=$(for f in "${files[@]}"; do
+    printf '%s\0icon\x1f%s\n' "${f##*/}" "$(thumb "$f")"
+done | rofi -dmenu -i -show-icons -format i -p "󰍹  Login" \
+    -theme "$rasi" \
+    -theme-str "imagebox { background-image: url(\"$theme/background.jpg\", height); }
+                entry { placeholder: \"Login wallpaper…\"; }
+                listview { lines: 5; }
+                element-icon { size: 64px; }")
+[[ -n "$choice" ]] || exit 0
+src="${files[$choice]}"
+
+# Render a 2560px-wide JPEG (first frame for videos/gifs), then copy it over
+# the user-owned file inside the root-owned theme dir.
+tmp="$cache/background.tmp.jpg"
+vf="scale='min(2560,iw)':-2"
+ffmpeg -loglevel error -y -ss 0.5 -i "$src" -frames:v 1 -vf "$vf" -q:v 2 "$tmp" </dev/null \
+    || ffmpeg -loglevel error -y -i "$src" -frames:v 1 -vf "$vf" -q:v 2 "$tmp" </dev/null \
+    || { notify-send -a "Login theme" "Couldn't read ${src##*/}"; exit 1; }
+cp "$tmp" "$theme/background.jpg" && rm -f "$tmp"
+
+# Launcher colours (#RRGGBB[AA]) -> Qt (#[AA]RRGGBB)
+col() {
+    local v
+    v=$(sed -n "s/^[[:space:]]*$1:[[:space:]]*\(#[0-9A-Fa-f]*\);.*/\1/p" "$colors" | head -1)
+    [[ ${#v} -eq 9 ]] && v="#${v:7:2}${v:1:6}"
+    printf '%s' "$v"
+}
+if [[ -f "$colors" ]]; then
+    {
+        echo "[General]"
+        echo "cBackground=$(col background)"
+        echo "cBackgroundAlt=$(col background-alt)"
+        echo "cForeground=$(col foreground)"
+        echo "cForegroundDim=$(col foreground-dim)"
+        echo "cSelected=$(col selected)"
+        echo "cOnSelected=$(col on-selected)"
+        echo "cSelectedSoft=$(col selected-soft)"
+        echo "cBorder=$(col border-col)"
+        echo "cUrgent=$(col urgent)"
+    } > "$theme/theme.conf.user"
+fi
+
+notify-send -a "Login theme" -i "$theme/background.jpg" "Login wallpaper set" "${src##*/}"

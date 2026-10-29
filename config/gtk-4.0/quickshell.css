@@ -1,0 +1,110 @@
+/*
+ * Colores GTK4 / libadwaita.
+ * Renderizado por Config/Settings.qml (gtkTokens() + renderTemplate()).
+ *
+ * Se escribe en ~/.config/gtk-4.0/quickshell.css. gtk.css NO se toca
+ * directamente: ensureGtkImport() en Config/Settings.qml se limita a
+ * asegurar que gtk.css importe este archivo, conservando lo que ya tuvieras ahí.
+ *
+ * Editable a mano: cambia lo que quieras, se relee en cada aplicación.
+ */
+
+@define-color accent_color #86afea;
+@define-color accent_bg_color #86afea;
+@define-color accent_fg_color #0f1419;
+
+@define-color destructive_bg_color #da6c91;
+@define-color destructive_fg_color #1a1a1a;
+
+@define-color error_bg_color #da6c91;
+@define-color error_fg_color #1a1a1a;
+
+@define-color window_bg_color #0f1419;
+@define-color window_fg_color #ebedf0;
+
+@define-color view_bg_color #131820;
+@define-color view_fg_color #ebedf0;
+
+@define-color headerbar_bg_color #0f1419;
+@define-color headerbar_fg_color #ebedf0;
+@define-color headerbar_backdrop_color @window_bg_color;
+
+@define-color popover_bg_color #1a2028;
+@define-color popover_fg_color #ebedf0;
+
+@define-color card_bg_color #1a2028;
+@define-color card_fg_color #ebedf0;
+
+@define-color dialog_bg_color #131820;
+@define-color dialog_fg_color #ebedf0;
+
+@define-color overview_bg_color #1a2028;
+@define-color overview_fg_color #ebedf0;
+
+@define-color sidebar_bg_color #0f1419;
+@define-color sidebar_fg_color #b0b6bf;
+@define-color sidebar_backdrop_color @window_bg_color;
+@define-color sidebar_border_color @window_bg_color;
+
+@define-color secondary_sidebar_bg_color #0f1419;
+@define-color secondary_sidebar_fg_color #b0b6bf;
+
+/* Ventana sin foco. */
+@define-color theme_unfocused_fg_color @window_fg_color;
+@define-color theme_unfocused_text_color @view_fg_color;
+@define-color theme_unfocused_bg_color @window_bg_color;
+@define-color theme_unfocused_base_color @window_bg_color;
+@define-color theme_unfocused_selected_bg_color @accent_bg_color;
+@define-color theme_unfocused_selected_fg_color @accent_fg_color;
+
+/* Variables CSS crudas: algunas apps GTK4/libadwaita recientes leen
+   --custom-properties en vez de los @define-color de arriba. */
+:root {
+    --accent-color: #86afea;
+    --accent-bg-color: #86afea;
+    --accent-fg-color: #0f1419;
+
+    --destructive-bg-color: #da6c91;
+    --destructive-fg-color: #1a1a1a;
+
+    --error-bg-color: #da6c91;
+    --error-fg-color: #1a1a1a;
+    --error-color: #da6c91;
+
+    --window-bg-color: #0f1419;
+    --window-fg-color: #ebedf0;
+
+    --view-bg-color: #131820;
+    --view-fg-color: #ebedf0;
+
+    --headerbar-bg-color: #0f1419;
+    --headerbar-fg-color: #ebedf0;
+    --headerbar-backdrop-color: @window_bg_color;
+
+    --popover-bg-color: #1a2028;
+    --popover-fg-color: #ebedf0;
+
+    --card-bg-color: #1a2028;
+    --card-fg-color: #ebedf0;
+
+    --dialog-bg-color: #131820;
+    --dialog-fg-color: #ebedf0;
+
+    --overview-bg-color: #1a2028;
+    --overview-fg-color: #ebedf0;
+
+    --sidebar-bg-color: #0f1419;
+    --sidebar-fg-color: #b0b6bf;
+    --sidebar-backdrop-color: @window_bg_color;
+    --sidebar-border-color: @window_bg_color;
+
+    --warning-bg-color: #bfde7c;
+    --warning-fg-color: #1a1a1a;
+    --warning-color: #bfde7c;
+
+    --success-color: #81cfaa;
+    --success-bg-color: #81cfaa;
+    --success-fg-color: #1a1a1a;
+
+    --shade-color: rgba(0, 0, 0, 0.36);
+}

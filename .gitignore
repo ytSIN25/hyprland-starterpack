@@ -1,0 +1,3 @@
+# Wallpapers are not distributed (size + third-party artwork); add your own
+config/wallpapers/*
+!config/wallpapers/README.md

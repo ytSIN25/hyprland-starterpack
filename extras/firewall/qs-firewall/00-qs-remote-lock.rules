@@ -1,0 +1,28 @@
+// Root lock: while someone is connected remotely (SSH or VNC), polkit won't
+// hand out root. qs-remote-guard --polkit exits non-zero when remote (or when
+// it can't tell), and polkit.spawn throws on that.
+function qsRemoteActive() {
+    try {
+        polkit.spawn(["/usr/local/sbin/qs-remote-guard", "--polkit"]);
+        return false;
+    } catch (e) {
+        return true;
+    }
+}
+
+// Password prompts ("authenticate as admin") can never succeed while remote:
+// the only accepted admin is 'nobody', whose account has no password.
+polkit.addAdminRule(function(action, subject) {
+    if (qsRemoteActive())
+        return ["unix-user:nobody"];
+});
+
+// Actions that give root (or start services/containers as root) are refused
+// outright while remote, even if they were authorised a moment ago. This also
+// covers the firewall/sshd bar toggles, so the firewall can't be switched off
+// from a remote session.
+var qsRootActions = /^org\.freedesktop\.(policykit\.exec|systemd1\.|machine1\.|import1\.|portable1\.|home1\.|accounts\.|packagekit\.|udisks2\.modify-device)/;
+polkit.addRule(function(action, subject) {
+    if (subject.user != "root" && qsRootActions.test(action.id) && qsRemoteActive())
+        return polkit.Result.NO;
+});

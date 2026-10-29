@@ -1,0 +1,163 @@
+#!/usr/bin/python3 -I
+"""Root helper for the battery panel's fan curve (LenovoLegionLinux backend).
+
+    quickshell-fan-curve read           print the hardware fan table as JSON
+    quickshell-fan-curve apply '<json>' write a JSON fan table to the hardware
+                                        and save it as the curve to restore
+    quickshell-fan-curve restore        re-apply the saved curve (boot/resume;
+                                        quickshell-fan-curve.service)
+
+Installed to /usr/local/sbin and run through a NOPASSWD sudoers rule, so the
+input is validated strictly before anything reaches legion_cli.
+"""
+import glob
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import time
+
+import yaml
+
+LEGION_CLI = "/usr/bin/legion_cli"
+# The embedded controller forgets the table on reboot, so the last applied
+# curve is kept here (root-only) and restored by quickshell-fan-curve.service.
+SAVED = "/var/lib/quickshell-fan-curve/curve.json"
+WRITE_TRIES = 8
+
+# Allowed range for every field of a fan table row.
+LIMITS = {
+    "fan1_speed": (0, 6000),
+    "fan2_speed": (0, 6000),
+    "cpu_lower_temp": (0, 127),
+    "cpu_upper_temp": (0, 127),
+    "gpu_lower_temp": (0, 127),
+    "gpu_upper_temp": (0, 127),
+    "ic_lower_temp": (0, 127),
+    "ic_upper_temp": (0, 127),
+    "acceleration": (0, 255),
+    "deceleration": (0, 255),
+}
+
+
+def fail(msg):
+    print(msg, file=sys.stderr)
+    sys.exit(1)
+
+
+def legion(*args):
+    r = subprocess.run([LEGION_CLI, *args], capture_output=True, text=True)
+    if r.returncode != 0:
+        fail((r.stderr or r.stdout).strip() or "legion_cli failed")
+
+
+def hw_entries():
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "curve.yaml")
+        legion("fancurve-write-hw-to-file", path)
+        with open(path) as f:
+            data = yaml.safe_load(f)
+    return data.get("entries", [])
+
+
+def read():
+    print(json.dumps(hw_entries()))
+
+
+def hwmon():
+    for d in glob.glob("/sys/class/hwmon/hwmon*"):
+        try:
+            with open(d + "/name") as f:
+                if f.read().strip() == "legion_hwmon":
+                    return d
+        except OSError:
+            pass
+    fail("legion_hwmon not found")
+
+
+def fix_speeds(entries):
+    """Re-write any speed the EC dropped, one point at a time, until it sticks.
+
+    The driver rewrites the whole table on every attribute write, and legion_cli's
+    burst of writes often leaves the hot end of the curve on its old values.
+    """
+    h = hwmon()
+
+    def rd(name):
+        with open(f"{h}/{name}") as f:
+            return int(f.read().strip())
+
+    want = {}
+    for i, e in enumerate(entries, start=1):
+        for fan in (1, 2):
+            # Same RPM -> PWM conversion legion_cli uses for RPM-unit tables.
+            pwm = int(e[f"fan{fan}_speed"] // 100 * (100 * 255) / rd(f"fan{fan}_max"))
+            want[f"pwm{fan}_auto_point{i}_pwm"] = max(0, min(255, pwm))
+    for _ in range(WRITE_TRIES):
+        bad = [n for n, v in want.items() if rd(n) != v]
+        if not bad:
+            return
+        for n in bad:
+            with open(f"{h}/{n}", "w") as f:
+                f.write(str(want[n]))
+            time.sleep(0.1)
+    fail("the fan controller kept rejecting part of the curve")
+
+
+def apply(raw, save=True):
+    try:
+        entries = json.loads(raw)
+    except ValueError:
+        fail("invalid JSON")
+    if not isinstance(entries, list) or not 1 <= len(entries) <= 10:
+        fail("expected 1-10 entries")
+
+    clean = []
+    for e in entries:
+        if not isinstance(e, dict) or set(e) != set(LIMITS):
+            fail("each entry needs exactly: " + ", ".join(LIMITS))
+        row = {}
+        for k, (lo, hi) in LIMITS.items():
+            v = e[k]
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not lo <= v <= hi:
+                fail(f"{k} out of range ({lo}-{hi})")
+            row[k] = int(v)
+        # This EC drives both fans from fan 1's value and overwrites fan 2 with
+        # it, so a different fan 2 speed could never be verified (the stock
+        # tables have fan 2 300 RPM higher at some points).
+        row["fan2_speed"] = row["fan1_speed"]
+        clean.append(row)
+
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "curve.yaml")
+        with open(path, "w") as f:
+            yaml.safe_dump({"name": "quickshell", "entries": clean, "enable_minifancurve": False}, f, sort_keys=False)
+        legion("fancurve-write-file-to-hw", path)
+    fix_speeds(clean)
+    if save:
+        os.makedirs(os.path.dirname(SAVED), mode=0o700, exist_ok=True)
+        tmp = SAVED + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(clean, f)
+        os.replace(tmp, SAVED)
+    print("ok")
+
+
+def restore():
+    if not os.path.exists(SAVED):
+        print("no saved curve")
+        return
+    with open(SAVED) as f:
+        apply(f.read(), save=False)   # validated again like any other input
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 2 and sys.argv[1] == "read":
+        read()
+    elif len(sys.argv) == 3 and sys.argv[1] == "apply":
+        apply(sys.argv[2])
+    elif len(sys.argv) == 2 and sys.argv[1] == "restore":
+        restore()
+    else:
+        fail(__doc__)

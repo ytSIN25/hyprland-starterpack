@@ -1,0 +1,552 @@
+import QtQuick
+import QtQuick.Layouts
+import Quickshell.Io
+import Quickshell.Services.UPower
+import qs.Components
+import qs.Config
+import qs.Services
+
+// Detalle de batería: cabecera con estado + %, barra de progreso, info de
+// tamaño/ciclos/tiempo restante (vía `upower -i`, ya que esas propiedades no
+// están expuestas de forma fiable por el binding de UPower en QML), y el
+// selector de perfil de energía reutilizado tal cual de PowerDetail.qml.
+Popout {
+    id: panel
+    ns: "qs-battery"
+    cardWidth: 380
+    cardMinWidth: 320
+    scrollable: false
+    shown: Globals.batteryOpen
+
+    onShownChanged: if (shown) fetchProc.running = true
+
+    readonly property var dev: {
+        const devices = UPower.devices ?? []
+        for (let i = 0; i < devices.length; i++) {
+            const d = devices[i]
+            if (d && ((d.type === "Battery") || (d.isLaptopBattery ?? false)))
+                return d
+        }
+        return UPower.displayDevice
+    }
+    readonly property int percent: Math.max(0, Math.min(100, Math.round((dev?.percentage ?? 0) * 100)))
+    readonly property bool charging: (dev?.state ?? 0) === UPowerDeviceState.Charging
+                                     || (dev?.state ?? 0) === UPowerDeviceState.PendingCharge
+    readonly property bool fullyCharged: (dev?.state ?? 0) === UPowerDeviceState.FullyCharged
+    readonly property string statusLabel:
+        fullyCharged ? I18n.tr("FULLY CHARGED")
+        : charging ? I18n.tr("CHARGING")
+        : I18n.tr("DISCHARGING")
+
+    // Datos que `upower -i` da y el binding QML no expone de forma fiable.
+    property string sizeWh: "-"
+    property string cycles: "-"
+    property string timeToFull: "-"
+    property string timeToEmpty: "-"
+
+    Process {
+        id: fetchProc
+        command: ["sh", "-c", "upower -i $(upower -e | grep -i battery | head -n1) 2>/dev/null"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const lines = (this.text || "").split("\n")
+                for (const raw of lines) {
+                    const line = raw.trim()
+                    if (line.indexOf("energy-full:") === 0)
+                        panel.sizeWh = line.split(":")[1].trim().replace(" Wh", "Wh")
+                    else if (line.indexOf("charge-cycles:") === 0)
+                        panel.cycles = line.split(":")[1].trim()
+                    else if (line.indexOf("time to full:") === 0)
+                        panel.timeToFull = line.split(":").slice(1).join(":").trim()
+                    else if (line.indexOf("time to empty:") === 0)
+                        panel.timeToEmpty = line.split(":").slice(1).join(":").trim()
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        Layout.fillWidth: true
+        implicitHeight: body.implicitHeight + Theme.space16 * 2
+        radius: Theme.barRadius
+        color: Theme.withAlpha(Theme.surface, 0.62)
+        border.width: Theme.hairline
+        border.color: Theme.withAlpha(Theme.overlay, 0.34)
+
+        ColumnLayout {
+            id: body
+            anchors.fill: parent
+            anchors.margins: Theme.space14
+            spacing: Theme.space10
+
+            // Cabecera: icono + "Battery" + estado, % grande a la derecha.
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.space8
+
+                // Icono dibujado (rectángulos), no depende de que la fuente
+                // tenga el glifo — el mismo problema que ya tuvo el icono
+                // del pill de la barra.
+                Item {
+                    implicitWidth: Theme.dp(24)
+                    implicitHeight: Theme.dp(14)
+                    Layout.alignment: Qt.AlignVCenter
+
+                    Rectangle {
+                        id: battBody
+                        width: parent.width - Theme.dp(3)
+                        height: parent.height
+                        radius: Theme.dp(3)
+                        color: "transparent"
+                        border.width: Theme.dp(1.5)
+                        border.color: Theme.fg
+                    }
+                    Rectangle {
+                        anchors.left: battBody.right
+                        anchors.verticalCenter: battBody.verticalCenter
+                        width: Theme.dp(3)
+                        height: Theme.dp(6)
+                        radius: Theme.dp(1)
+                        color: Theme.fg
+                    }
+                    Rectangle {
+                        anchors.left: battBody.left
+                        anchors.verticalCenter: battBody.verticalCenter
+                        anchors.leftMargin: Theme.dp(2)
+                        height: battBody.height - Theme.dp(4)
+                        width: Math.max(Theme.dp(2), (battBody.width - Theme.dp(4)) * panel.percent / 100)
+                        radius: Theme.dp(1)
+                        color: panel.charging ? Theme.cyan : Theme.fg
+                        Behavior on width { NumberAnimation { duration: Theme.animFast } }
+                    }
+                    // Rayo pequeño en la esquina si está cargando — decorativo,
+                    // no crítico si el glifo no existe en la fuente.
+                    Text {
+                        visible: panel.charging
+                        anchors.centerIn: parent
+                        text: "\u26A1"
+                        color: Theme.cyan
+                        font.pixelSize: Theme.dp(11)
+                        style: Text.Outline
+                        styleColor: Theme.surface
+                    }
+                }
+
+                ColumnLayout {
+                    spacing: 0
+                    Text {
+                        text: I18n.tr("Battery")
+                        color: Theme.fg
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize + 2
+                        font.bold: true
+                    }
+                    Text {
+                        text: panel.statusLabel
+                        color: Theme.fgDim
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize - 4
+                        font.bold: true
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+
+                Text {
+                    text: panel.percent + "%"
+                    color: Theme.fg
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize + 10
+                    font.bold: true
+                }
+            }
+
+            // Barra de progreso.
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: Theme.dp(8)
+                radius: height / 2
+                color: Theme.withAlpha(Theme.overlay, 0.35)
+
+                Rectangle {
+                    height: parent.height
+                    width: parent.width * panel.percent / 100
+                    radius: height / 2
+                    color: Theme.fg
+                    Behavior on width { NumberAnimation { duration: Theme.animFast } }
+                }
+            }
+
+            // Rejilla de info: tamaño/ciclos a la izquierda, tiempos a la derecha.
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: Theme.space16
+                rowSpacing: Theme.space4
+
+                InfoRow { label: I18n.tr("Battery size"); value: panel.sizeWh }
+                InfoRow { label: I18n.tr("Time to full"); value: panel.charging ? panel.timeToFull : "-" }
+                InfoRow { label: I18n.tr("Charge cycles"); value: panel.cycles }
+                InfoRow { label: I18n.tr("Charging"); value: panel.charging ? I18n.tr("Yes") : "-" }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: Theme.hairline
+                color: Theme.withAlpha(Theme.overlay, 0.28)
+            }
+
+            Text {
+                text: I18n.tr("POWER PROFILE")
+                color: Theme.fgDim
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize - 4
+                font.bold: true
+            }
+
+            // Mismas filas de perfil que PowerDetail.qml, reutilizadas tal cual.
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Theme.space6
+                Repeater {
+                    model: Power.profiles
+                    delegate: ProfileRow {
+                        required property var modelData
+                        info: modelData
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: Theme.hairline
+                color: Theme.withAlpha(Theme.overlay, 0.28)
+            }
+
+            // Fan control UI. The helper bridge intentionally fails closed
+            // unless a compatible backend has been installed and configured.
+            ColumnLayout {
+                id: fanControl
+                Layout.fillWidth: true
+                spacing: Theme.space8
+
+                property int fanLevel: 0
+                property bool automaticMode: true
+                property string fanStatus: "Checking fan controller…"
+                property int fan1Rpm: -1
+                property int fan2Rpm: -1
+                property bool graphVisible: false
+
+                // Read actual tachometer RPM independently from the slider value.
+                Process {
+                    id: fanRpmProc
+                    command: ["sh", "-lc", "sudo -n /usr/bin/cat /sys/kernel/debug/legion/fancurve 2>/dev/null"]
+                    stdout: StdioCollector {
+                        onStreamFinished: {
+                            const t = this.text || ""
+                            const a = t.match(/1 fanspeed:\s*(\d+)/i)
+                            const b = t.match(/2 fanspeed:\s*(\d+)/i)
+                            if (a) fanControl.fan1Rpm = Number(a[1])
+                            if (b) fanControl.fan2Rpm = Number(b[1])
+                        }
+                    }
+                }
+                Timer {
+                    interval: 2000
+                    repeat: true
+                    running: panel.shown
+                    onTriggered: fanRpmProc.running = true
+                }
+
+                Process {
+                    id: fanStatusProc
+                    command: ["sh", "-lc", "command -v quickshell-fan-control >/dev/null 2>&1 && quickshell-fan-control status || echo 'Backend not configured'"]
+                    stdout: StdioCollector {
+                        onStreamFinished: fanControl.fanStatus = (this.text || "").trim()
+                    }
+                }
+
+                Process {
+                    id: fanApplyProc
+                    command: ["sh", "-lc", "quickshell-fan-control set " + fanControl.fanLevel]
+                    stdout: StdioCollector {
+                        onStreamFinished: fanStatusProc.running = true
+                    }
+                    stderr: StdioCollector {
+                        onStreamFinished: fanStatusProc.running = true
+                    }
+                }
+
+                // Automatic mode restores the saved hardware fan curve,
+                // which adjusts fan speed according to temperature.
+                // Manual slider changes are applied after a short debounce.
+                Timer {
+                    id: fanApplyDebounce
+                    interval: 500
+                    repeat: false
+                    onTriggered: {
+                        if (fanControl.fanStatus !== "Backend not configured")
+                            fanApplyProc.running = true
+                    }
+                }
+
+                Component.onCompleted: {
+                    fanStatusProc.running = true
+                    fanRpmProc.running = true
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        text: "FAN CURVE"
+                        color: Theme.fgDim
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize - 4
+                        font.bold: true
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        text: fanControl.automaticMode ? "AUTO" : fanControl.fanLevel + "%"
+                        color: Theme.accent
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize
+                        font.bold: true
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        Layout.fillWidth: true
+                        text: "Live RPM  ·  " + (fanControl.fan1Rpm >= 0 ? fanControl.fan1Rpm : "—") + " / " + (fanControl.fan2Rpm >= 0 ? fanControl.fan2Rpm : "—") + " RPM"
+                        color: Theme.fgDim
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize - 1
+                    }
+                    Rectangle {
+                        radius: Theme.pillRadius
+                        color: fanControl.graphVisible ? Theme.withAlpha(Theme.accent, 0.25) : Theme.withAlpha(Theme.overlay, 0.12)
+                        border.width: Theme.hairline
+                        border.color: Theme.withAlpha(Theme.overlay, 0.4)
+                        implicitWidth: graphToggleLabel.implicitWidth + Theme.space12
+                        implicitHeight: Theme.rowM
+                        Text {
+                            id: graphToggleLabel
+                            anchors.centerIn: parent
+                            text: fanControl.graphVisible ? "Hide graph" : "Show graph"
+                            color: Theme.fg
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize - 2
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: fanControl.graphVisible = !fanControl.graphVisible
+                        }
+                    }
+                }
+
+                // Compact LenovoLegionLinux-style temperature/RPM curve preview.
+                Rectangle {
+                    Layout.fillWidth: true
+                    visible: fanControl.graphVisible
+                    implicitHeight: 184
+                    radius: Theme.pillRadius
+                    color: Theme.withAlpha(Theme.surface, 0.55)
+                    border.width: Theme.hairline
+                    border.color: Theme.withAlpha(Theme.overlay, 0.28)
+                    Canvas {
+                        id: fanCurveCanvas
+                        anchors.fill: parent
+                        anchors.margins: Theme.space10
+                        onWidthChanged: requestPaint()
+                        onHeightChanged: requestPaint()
+                        Connections {
+                            target: fanControl
+                            function onFanLevelChanged() { fanCurveCanvas.requestPaint() }
+                            function onAutomaticModeChanged() { fanCurveCanvas.requestPaint() }
+                        }
+                        onPaint: {
+                            const ctx = getContext("2d")
+                            ctx.clearRect(0, 0, width, height)
+                            const L = 29, R = 8, T = 10, B = 25
+                            const pw = width - L - R, ph = height - T - B
+                            const X = t => L + t / 110 * pw
+                            const Y = rpm => T + (6000 - rpm) / 6000 * ph
+                            ctx.font = "10px sans-serif"
+                            ctx.lineWidth = 1
+                            ctx.strokeStyle = "#555b6570"
+                            ctx.fillStyle = Theme.fgDim
+                            for (let rpm = 0; rpm <= 6000; rpm += 1000) {
+                                const y = Y(rpm)
+                                ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(width-R, y); ctx.stroke()
+                                ctx.fillText(rpm === 0 ? "0" : (rpm/1000)+"k", 0, y+3)
+                            }
+                            for (let t = 0; t <= 100; t += 20) {
+                                const x = X(t)
+                                ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, height-B+2); ctx.stroke()
+                                ctx.fillText(t+"°", x-8, height-7)
+                            }
+                            const temps = [0,60,70,80,80,80,80,80,80,94]
+                            const base = [1400,3400,3700,4200,4200,4200,4200,5400,4200,5500]
+                            const scale = fanControl.fanLevel === 100 ? 1 : (1 + 0.35*fanControl.fanLevel/100)
+                            ctx.lineWidth = 2.5
+                            ctx.strokeStyle = "#3488d8"
+                            ctx.beginPath()
+                            for (let i=0;i<temps.length;i++) {
+                                const x=X(temps[i]), y=Y(Math.min(6000, base[i]*scale))
+                                if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y)
+                            }
+                            ctx.stroke()
+                            for (let i=0;i<temps.length;i++) {
+                                ctx.beginPath(); ctx.arc(X(temps[i]),Y(Math.min(6000,base[i]*scale)),3,0,Math.PI*2)
+                                ctx.fillStyle="#3488d8"; ctx.fill()
+                            }
+                            ctx.fillStyle = "#3488d8"; ctx.fillText("Fan 1", width-78, 10)
+                            ctx.fillStyle = "#e28a3b"; ctx.fillText("Fan 2", width-38, 10)
+                            ctx.strokeStyle = "#e28a3b"; ctx.beginPath()
+                            for (let i=0;i<temps.length;i++) {
+                                const x=X(temps[i]), y=Y(Math.min(6000,base[i]*scale))
+                                if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y)
+                            }
+                            ctx.stroke()
+                        }
+                    }
+                }
+
+                SliderRow {
+                    Layout.fillWidth: true
+                    label: "Cooling intensity"
+                    glyph: "󰈐"
+                    from: 0
+                    to: 100
+                    value: fanControl.fanLevel
+                    valueText: fanControl.fanLevel + "%"
+                    onMoved: (v) => {
+                        fanControl.automaticMode = false
+                        fanControl.fanLevel = Math.round(v / 5) * 5
+                        fanApplyDebounce.restart()
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Item { Layout.fillWidth: true }
+                    Rectangle {
+                        radius: Theme.pillRadius
+                        color: fanControl.automaticMode
+                               ? Theme.withAlpha(Theme.accent, 0.28)
+                               : Theme.withAlpha(Theme.accent, 0.12)
+                        border.width: Theme.hairline
+                        border.color: Theme.withAlpha(Theme.accent, 0.65)
+                        implicitWidth: autoLabel.implicitWidth + Theme.space16
+                        implicitHeight: Theme.rowM
+                        Text {
+                            id: autoLabel
+                            anchors.centerIn: parent
+                            text: "Automatic"
+                            color: Theme.fg
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize - 1
+                            font.bold: true
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            enabled: fanControl.fanStatus !== "Backend not configured"
+                            onClicked: {
+                                fanApplyDebounce.stop()
+                                fanControl.automaticMode = true
+                                fanControl.fanLevel = 0
+                                fanApplyProc.running = true
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    component InfoRow: RowLayout {
+        property string label: ""
+        property string value: ""
+        Layout.fillWidth: true
+        spacing: Theme.space6
+
+        Text {
+            text: label
+            color: Theme.fgDim
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize - 2
+        }
+        Item { Layout.fillWidth: true }
+        Text {
+            text: value
+            color: Theme.fg
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize - 2
+            font.bold: true
+        }
+    }
+
+    component ProfileRow: Rectangle {
+        id: pr
+        property var info
+        readonly property bool active: Power.matches(info?.value ?? -1)
+
+        Layout.fillWidth: true
+        implicitHeight: Theme.rowL
+        radius: Theme.pillRadius
+        color: active ? Qt.rgba(info.color.r, info.color.g, info.color.b, 0.16)
+                      : prMa.containsMouse ? Theme.surfaceHi : Theme.withAlpha(Theme.surface, 0.36)
+        border.width: active ? Math.max(1, Theme.dp(2)) : Theme.hairline
+        border.color: active ? info.color : Theme.withAlpha(Theme.overlay, 0.28)
+        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: Theme.space10
+            anchors.rightMargin: Theme.space10
+            spacing: Theme.space8
+
+            Text {
+                text: pr.info?.icon ?? ""
+                color: pr.active ? pr.info.color : Theme.fgDim
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.iconSize
+            }
+            Text {
+                Layout.fillWidth: true
+                text: pr.info?.label ?? ""
+                color: pr.active ? Theme.fg : Theme.fgDim
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize - 1
+                font.bold: pr.active
+                elide: Text.ElideRight
+            }
+            Text {
+                visible: pr.active
+                text: I18n.tr("Active")
+                color: pr.info.color
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize - 4
+                font.bold: true
+            }
+            Text {
+                visible: pr.active
+                text: "󰓏"
+                color: pr.info.color
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.iconSize
+            }
+        }
+
+        MouseArea {
+            id: prMa
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: Power.set(pr.info.value)
+        }
+    }
+}

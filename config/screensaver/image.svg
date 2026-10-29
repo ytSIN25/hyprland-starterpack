@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+	viewBox="0 0 635 635"
+	width="400" height="400">
+	
+	<rect width="635" height="635" x="0" y="0" fill="#2ca5de" />
+	<rect width="377" height="140" x="333" y="-100" transform="rotate(60)" fill="#2384b1" />
+	<rect width="378" height="150" x="320" y="50"   transform="rotate(35)" fill="#2384b1" />
+	<rect width="388" height="75"  x="400" y="-110" transform="rotate(45)" fill="#2384b1" />
+	<rect width="398" height="75"  x="420" y="-80"  transform="rotate(45)" fill="#2384b1" />
+	<rect width="248" height="100" x="500" y="-150" transform="rotate(45)" fill="#2384b1" />
+	<rect width="314" height="212.2" x="321" y="422.8" fill="#2384b1" />
+	
+	<line x1="340" y1="221" x2="300" y2="414" stroke="#ffffff" stroke-width="50" stroke-linecap="round" />
+	<line x1="215" y1="242" x2="146" y2="315" stroke="#ffffff" stroke-width="50" stroke-linecap="round" />
+	<line x1="212" y1="381" x2="146" y2="315" stroke="#ffffff" stroke-width="50" stroke-linecap="round" />
+	<line x1="426" y1="246" x2="486" y2="312" stroke="#ffffff" stroke-width="50" stroke-linecap="round" />
+	<line x1="486" y1="312" x2="420" y2="383" stroke="#ffffff" stroke-width="50" stroke-linecap="round" />
+</svg>

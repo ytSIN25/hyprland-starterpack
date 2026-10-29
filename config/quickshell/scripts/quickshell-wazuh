@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fixed location of this user's Wazuh Docker Compose project.
+PROJECT_DIR="@HOME@/Security/wazuh-docker/single-node"
+
+has_agent() {
+    systemctl list-unit-files wazuh-agent.service >/dev/null 2>&1
+}
+
+is_running() {
+    # No Docker daemon or no project means the stack can't be up.
+    systemctl is-active --quiet docker || return 1
+    [[ -d "$PROJECT_DIR" ]] || return 1
+    local ids
+    ids="$(cd "$PROJECT_DIR" && docker compose ps --status running -q 2>/dev/null)" || return 1
+    [[ -n "$ids" ]]
+}
+
+case "${1:-}" in
+    status)
+        if is_running; then
+            printf 'ON\n'
+        else
+            printf 'OFF\n'
+        fi
+        ;;
+    toggle)
+        if is_running; then
+            # Stop the local agent first, then stop the Docker stack.
+            # `stop` keeps containers and data; never `down -v` here.
+            has_agent && systemctl stop wazuh-agent || true
+            (cd "$PROJECT_DIR" && docker compose stop)
+            printf 'OFF\n'
+        else
+            [[ -d "$PROJECT_DIR" ]] || { echo "Missing $PROJECT_DIR" >&2; exit 1; }
+            systemctl start docker
+            (cd "$PROJECT_DIR" && docker compose up -d)
+            has_agent && systemctl start wazuh-agent || true
+            printf 'ON\n'
+        fi
+        ;;
+    *)
+        echo "Usage: quickshell-wazuh {status|toggle}" >&2
+        exit 2
+        ;;
+esac

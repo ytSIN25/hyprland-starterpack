@@ -1,0 +1,251 @@
+#!/usr/bin/env python3
+# Snapshot of who is talking to this PC, as JSON for Quickshell
+# (Services/Firewall.qml):
+#
+#   firewall   "active" | "inactive" | "missing"
+#   inbound   connections someone else opened to a port we listen on
+#   listening ports reachable from outside (loopback-only ones left out)
+#   blocked   last packets the firewall dropped (kernel log), newest first
+
+import json, os, re, subprocess, time
+
+HOME = os.path.expanduser("~")
+# Friendly names for addresses we know
+KNOWN = {"10.18.178.224": "MacBook (ZeroTier)"}
+
+
+def run(cmd):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def unit_state(cmd):
+    out = run(cmd).strip()
+    return out if out in ("active", "activating", "deactivating", "failed") else ("inactive" if out == "inactive" else "missing")
+
+
+def split_addr(a):
+    a = re.sub(r"%[^:\]]+", "", a)  # drop "%iface" scope
+    host, _, port = a.rpartition(":")
+    host = host.strip("[]").removeprefix("::ffff:")
+    return host, port
+
+
+def is_loopback(h):
+    return h.startswith("127.") or h == "::1"
+
+
+def label(ip):
+    if ip in KNOWN:
+        return KNOWN[ip]
+    if is_loopback(ip):
+        return "This PC"
+    if ip.startswith("10.18.178."):
+        return "ZeroTier"
+    if ip.startswith("100.") or ip.startswith("fd7a:115c"):
+        return "Tailscale"
+    if ip.startswith(("192.168.", "10.", "172.16.", "fe80:", "fd", "fc")):
+        return "Home network"
+    return "Internet"
+
+
+def proc_name(p):
+    m = re.search(r'\(\("([^"]+)"', p)
+    return m.group(1) if m else ""
+
+
+SERVICE_NAMES = {"22": "SSH", "5900": "VNC", "24800": "Deskflow", "9993": "ZeroTier", "41641": "Tailscale"}
+
+# What each open port is, in plain words. By port, then by the systemd unit
+# that owns the socket (ss -e shows its cgroup even for root's processes).
+UNIT_NAMES = {"zerotier-one.service": "ZeroTier", "tailscaled.service": "Tailscale",
+              "sshd.service": "SSH", "systemd-networkd.service": "Network",
+              "NetworkManager.service": "NetworkManager", "avahi-daemon.service": "Avahi",
+              "systemd-resolved.service": "DNS resolver", "cups.service": "Printing"}
+
+
+def about(proto, port, name, ifaces):
+    if port == "22":
+        return "Remote login (SSH). Turn it off when you don't need it"
+    if port == "5900":
+        return "Screen sharing (wayvnc)"
+    if port == "24800":
+        return "Deskflow keyboard/mouse sharing"
+    if port == "5353":
+        return "Finding devices on your network (mDNS), used by %s" % (name or "an app")
+    if port == "546":
+        return "Asks your router for an IPv6 address (DHCPv6)"
+    if name == "ZeroTier":
+        return "ZeroTier links to your devices" if port == "9993" else "Extra ZeroTier link port"
+    if name == "Tailscale":
+        return "Tailscale links to your devices" if port == "41641" else "Tailscale file sharing (Taildrop)"
+    return "Opened by %s" % name if name else "Unknown program (owned by another user)"
+
+
+def reach(proto, port, ifaces, fw_on):
+    """(level, text): who can reach it. Mirrors scripts/qs-firewall.nft."""
+    vpn = {i for i in ifaces if i.startswith("zt") or i == "tailscale0"}
+    lan = {i for i in ifaces if i in ("", "*") or not (i.startswith(("zt", "tailscale", "docker", "br-", "veth")))}
+    if not lan:
+        if vpn:
+            return "limited", "Only your %s devices" % " / ".join(
+                sorted({"ZeroTier" if i.startswith("zt") else "Tailscale" for i in vpn}))
+        return "limited", "Only Docker containers"
+    if not fw_on:
+        return "open", "Anyone on your network (firewall is off)"
+    if proto == "tcp" and port in ("22", "24800"):
+        return "open", "Anyone on your network can connect"
+    if proto == "udp" and port in ("9993", "41641"):
+        return "limited", "Open, but only for encrypted ZeroTier/Tailscale links"
+    if proto == "udp" and port == "5353":
+        return "limited", "Your network, device discovery only"
+    if proto == "udp" and port == "546":
+        return "limited", "Only DHCP replies from your router"
+    return "blocked", "Blocked by the firewall" + (" (your ZeroTier/Tailscale devices can reach it)" if vpn else "")
+
+
+fw_on = unit_state(["systemctl", "is-active", "qs-firewall"]) == "active"
+ports, tcp_ports = {}, set()
+for line in run(["ss", "-tulnpeH"]).splitlines():
+    f = line.split()
+    if len(f) < 5:
+        continue
+    raw = f[4]
+    iface = (re.search(r"%([^:\]]+)", raw) or [None, ""])[1]
+    host, port = split_addr(raw)
+    if is_loopback(host):
+        continue
+    if f[0] == "tcp":
+        tcp_ports.add(port)
+    unit = (re.search(r"cgroup:\S*/([^/\s]+\.service)", line) or [None, ""])[1]
+    p = ports.setdefault((f[0], port), {"proto": f[0], "port": port, "addr": host or "*",
+                                        "process": "", "ifaces": set()})
+    p["ifaces"].add(iface if iface else ("*" if host in ("0.0.0.0", "::", "*", "") else
+                    ("zt" if host.startswith("10.18.178.") else
+                     "tailscale0" if host.startswith("100.") or host.startswith("fd7a:115c") else
+                     "docker" if host.startswith("172.1") else "lan")))
+    p["process"] = p["process"] or SERVICE_NAMES.get(port) or UNIT_NAMES.get(unit) or proc_name(" ".join(f[6:]))
+    # mDNS: the app that asked, from its cgroup (app-org.chromium.Chromium-2459.scope)
+    if not p["process"]:
+        app = re.search(r"app-(?:[a-z]+\.)*([A-Za-z0-9]+)-\d+\.scope", line)
+        if app:
+            p["process"] = app.group(1)
+listening = []
+for p in ports.values():
+    ifaces = p.pop("ifaces")
+    p["reach"], p["reach_text"] = reach(p["proto"], p["port"], ifaces, fw_on)
+    p["about"] = about(p["proto"], p["port"], p["process"], ifaces)
+    listening.append(p)
+listening.sort(key=lambda l: int(l["port"]) if l["port"].isdigit() else 0)
+
+def ssh_sessions():
+    """("ip", "port") -> logind session id of this user's SSH logins.
+
+    The shells inside an SSH login carry SSH_CONNECTION="ip port ..." and sit in
+    session-N.scope; other users' processes can't be read and are skipped.
+    """
+    out = {}
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            with open(f"/proc/{pid}/environ", "rb") as fh:
+                env = fh.read()
+            with open(f"/proc/{pid}/cgroup") as fh:
+                cg = fh.read()
+        except OSError:
+            continue
+        m = re.search(rb"(?:^|\0)SSH_CONNECTION=(\S+) (\d+) ", env)
+        s = re.search(r"/session-(\w+)\.scope", cg)
+        if m and s:
+            out[(m.group(1).decode(), m.group(2).decode())] = s.group(1)
+    return out
+
+
+def remote_ssh_logins():
+    """ip -> [session ids] of logged-in SSH sessions (logind), any user."""
+    out = {}
+    for line in run(["loginctl", "list-sessions", "--no-legend"]).splitlines():
+        sid = line.split()[0] if line.split() else ""
+        if not sid:
+            continue
+        props = dict(l.split("=", 1) for l in run(["loginctl", "show-session", sid, "-p", "Remote",
+                     "-p", "RemoteHost", "-p", "Service", "-p", "State"]).splitlines() if "=" in l)
+        if props.get("Remote") == "yes" and props.get("Service") == "sshd" and props.get("State") != "closing":
+            out.setdefault(props.get("RemoteHost", ""), []).append(sid)
+    return out
+
+
+sessions = ssh_sessions()
+logins = remote_ssh_logins()
+inbound = []
+for line in run(["ss", "-tnpH", "state", "established"]).splitlines():
+    f = line.split()
+    if len(f) < 4:
+        continue
+    lhost, lport = split_addr(f[2])
+    rhost, rport = split_addr(f[3])
+    if lport not in tcp_ports or is_loopback(rhost):
+        continue
+    inbound.append({"ip": rhost, "rport": rport, "port": lport, "where": label(rhost),
+                    "service": SERVICE_NAMES.get(lport, proc_name(f[4] if len(f) > 4 else "") or "port " + lport),
+                    # SSH login session (for the panel's Disconnect button), "" if not ours / not logged in yet
+                    "session": sessions.get((rhost, rport), "") if lport == "22" else "",
+                    "state": "connected"})
+
+# SSH: the TCP connection exists from the moment the password prompt shows.
+# Only connections with a login session are "connected"; the rest of them
+# (per IP, beyond its logind sessions) are still "authenticating".
+for ip in {e["ip"] for e in inbound if e["port"] == "22"}:
+    conns = [e for e in inbound if e["port"] == "22" and e["ip"] == ip]
+    spare = [sid for sid in logins.get(ip, []) if sid not in {e["session"] for e in conns}]
+    for e in conns:
+        if e["session"]:
+            continue
+        if spare:
+            e["session"] = spare.pop(0)     # logged in, but no shell to match the port (e.g. ssh -N)
+        else:
+            e["state"] = "authenticating"
+
+blocked = []
+for line in run(["journalctl", "-k", "-g", "qs-fw-drop", "--since", "-24h", "-o", "json", "-n", "40", "--no-pager"]).splitlines():
+    try:
+        j = json.loads(line)
+    except ValueError:
+        continue
+    msg = j.get("MESSAGE", "")
+    if isinstance(msg, list):
+        msg = bytes(msg).decode("utf-8", "replace")
+    kv = dict(re.findall(r"(\w+)=(\S*)", msg))
+    src = kv.get("SRC", "")
+    blocked.append({"t": int(int(j.get("__REALTIME_TIMESTAMP", "0")) / 1e6), "ip": src, "where": label(src),
+                    "proto": kv.get("PROTO", ""), "port": kv.get("DPT", ""), "iface": kv.get("IN", "")})
+blocked = blocked[::-1]
+
+# Root lock (install-rootlock.sh): "off" | "armed" | "locked" | "unlocked"
+# ("unlocked" = opened for a few minutes from the bar, until rootlock_until)
+try:
+    with open("/run/qs-remote/state") as fh:
+        rootlock = "locked" if fh.read().strip() == "remote" else "armed"
+except OSError:
+    rootlock = "off"
+rootlock_until = 0
+try:
+    with open("/run/qs-remote/allow") as fh:
+        u = int(fh.read().strip())
+    if u > time.time() and rootlock != "off":
+        rootlock, rootlock_until = "unlocked", u
+except (OSError, ValueError):
+    pass
+
+print(json.dumps({
+    "rootlock": rootlock,
+    "rootlock_until": rootlock_until,
+    "firewall": unit_state(["systemctl", "is-active", "qs-firewall"]),
+    "firewall_installed": os.path.exists("/etc/systemd/system/qs-firewall.service"),
+    "inbound": inbound,
+    "listening": listening,
+    "blocked": blocked,
+}))

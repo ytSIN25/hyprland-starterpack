@@ -1,0 +1,153 @@
+/**
+ * Quickshell launcher — matches the bar: capsule search, wallpaper preview,
+ * accent from the current wallpaper theme.
+ **/
+
+configuration {
+    modi:                  "drun,run,window";
+    show-icons:            true;
+    display-drun:          "󰀻  Apps";
+    display-run:           "  Run";
+    display-window:        "  Windows";
+    drun-display-format:   "{name}";
+    window-format:         "{w} · {c} · {t}";
+}
+
+@import "shared/colors.rasi"
+
+* {
+    font:             "JetBrainsMono Nerd Font 11";
+    background-color: transparent;
+    text-color:       @foreground;
+}
+
+window {
+    transparency:     "real";
+    location:         center;
+    anchor:           center;
+    width:            900px;
+    border:           2px solid;
+    border-color:     @border-col;
+    border-radius:    22px;
+    background-color: @background;
+    cursor:           "default";
+}
+
+mainbox {
+    orientation: horizontal;
+    spacing:     0px;
+    padding:     12px;
+    children:    [ "imagebox", "listbox" ];
+}
+
+/* Left: current wallpaper with the mode switcher on top of it */
+imagebox {
+    width:            300px;
+    expand:           false;
+    padding:          16px;
+    border-radius:    16px;
+    background-image: url("~/.config/wallpapers/firewatch-tower.png", height);
+    orientation:      vertical;
+    children:         [ "dummy", "mode-switcher" ];
+}
+dummy { expand: true; }
+
+mode-switcher {
+    orientation:      vertical;
+    spacing:          6px;
+    expand:           false;
+}
+button {
+    padding:          9px 14px;
+    border-radius:    100%;
+    background-color: @background;
+    text-color:       @foreground-dim;
+    horizontal-align: 0.0;
+    cursor:           pointer;
+}
+button selected {
+    background-color: @selected;
+    text-color:       @on-selected;
+}
+
+/* Right: capsule search + list */
+listbox {
+    orientation: vertical;
+    expand:      true;
+    spacing:     12px;
+    padding:     10px 6px 6px 18px;
+    children:    [ "inputbar", "message", "listview" ];
+}
+
+inputbar {
+    spacing:          12px;
+    padding:          12px 18px;
+    border-radius:    100%;
+    background-color: @background-alt;
+    children:         [ "textbox-icon", "entry", "num-filtered-rows" ];
+}
+textbox-icon {
+    expand:     false;
+    str:        "󰍉";
+    text-color: @selected;
+}
+entry {
+    cursor:            text;
+    placeholder:       "Search…";
+    placeholder-color: @foreground-dim;
+}
+num-filtered-rows {
+    expand:     false;
+    text-color: @foreground-dim;
+}
+
+listview {
+    columns:      1;
+    lines:        7;
+    cycle:        true;
+    dynamic:      true;
+    scrollbar:    false;
+    fixed-height: true;
+    spacing:      4px;
+    cursor:       "default";
+}
+
+element {
+    spacing:       14px;
+    padding:       9px 14px;
+    border:        0px 0px 0px 3px;
+    border-color:  transparent;
+    border-radius: 14px;
+    cursor:        pointer;
+}
+element normal.normal, element alternate.normal {
+    background-color: transparent;
+    text-color:       @foreground;
+}
+element selected.normal {
+    background-color: @selected-soft;
+    border-color:     @selected;
+    text-color:       @foreground;
+}
+element normal.active, element alternate.active   { text-color: @active; }
+element normal.urgent, element alternate.urgent   { text-color: @urgent; }
+element-icon {
+    size:       30px;
+    text-color: inherit;
+    cursor:     inherit;
+}
+element-text {
+    text-color:     inherit;
+    highlight:      bold underline;
+    vertical-align: 0.5;
+    cursor:         inherit;
+}
+
+message { border-radius: 14px; padding: 10px 14px; background-color: @background-alt; }
+textbox { text-color: @foreground; vertical-align: 0.5; }
+error-message {
+    padding:          16px;
+    border-radius:    16px;
+    background-color: @background;
+    text-color:       @foreground;
+}

@@ -1,0 +1,62 @@
+#!/bin/bash
+# Unlock the root lock for a few minutes, so someone connected over SSH/VNC can
+# use sudo/su (they still need the password for that). Installed to
+# /usr/local/sbin/qs-rootlock-allow and run password-less through sudo by the
+# bar (island → Allow → your password). qs-remote-guard reads the file it writes.
+#
+#   qs-rootlock-allow allow <minutes>   password on stdin (one line); 1..60 min
+#   qs-rootlock-allow revoke            lock again now
+#   qs-rootlock-allow status            seconds left (0 = locked)
+#
+# "allow" only works when BOTH hold, checked here as root:
+#   - the request comes from a local login session (seat, Remote=no), i.e. the
+#     desktop's bar, not from an SSH shell (that would be session-N with Remote=yes)
+#   - the password of the user who ran sudo is right
+# Exit codes: 0 ok · 10 wrong password · 11 not from the local desktop · 12 usage
+set -euo pipefail
+PATH=/usr/bin
+ALLOW=/run/qs-remote/allow
+
+die() { echo "qs-rootlock-allow: $2" >&2; exit "$1"; }
+
+# Our own login session: sudo doesn't open one, so this is the caller's.
+local_session() {
+    local s
+    s=$(grep -o 'session-[0-9a-z]*\.scope' /proc/self/cgroup | head -1) || return 1
+    s=${s#session-}; s=${s%.scope}
+    [[ $(loginctl show-session "$s" -p Remote --value 2>/dev/null) == no ]] || return 1
+    [[ -n $(loginctl show-session "$s" -p Seat --value 2>/dev/null) ]] || return 1
+    [[ $(loginctl show-session "$s" -p User --value 2>/dev/null) == "${SUDO_UID:-x}" ]]
+}
+
+case "${1:-}" in
+    allow)
+        [[ $# -eq 2 && $2 =~ ^[0-9]{1,2}$ ]] && (( 10#$2 >= 1 && 10#$2 <= 60 )) || die 12 "usage: allow <1..60>"
+        [[ -n ${SUDO_USER:-} && $SUDO_USER != root ]] || die 12 "run through sudo as the desktop user"
+        local_session || die 11 "only from the desktop itself, not from a remote session"
+        IFS= read -r pw || die 10 "no password"
+        printf '%s\0' "$pw" | unix_chkpwd "$SUDO_USER" nonull >/dev/null 2>&1 || {
+            logger -t qs-rootlock -p auth.warning "wrong password to unlock root (by $SUDO_USER)"
+            die 10 "wrong password"
+        }
+        mkdir -p -m 755 /run/qs-remote
+        tmp=$(mktemp /run/qs-remote/.allow.XXXXXX)
+        echo $(( $(date +%s) + 10#$2 * 60 )) > "$tmp"
+        chmod 644 "$tmp"
+        mv -f "$tmp" "$ALLOW"
+        logger -t qs-rootlock -p auth.notice "root unlocked for $((10#$2)) min by $SUDO_USER from the desktop"
+        ;;
+    revoke)
+        rm -f "$ALLOW"
+        logger -t qs-rootlock -p auth.notice "root locked again by ${SUDO_USER:-root}"
+        ;;
+    status)
+        left=0
+        if [[ -f $ALLOW ]]; then
+            u=$(< "$ALLOW")
+            [[ $u =~ ^[0-9]+$ ]] && (( u > $(date +%s) )) && left=$(( u - $(date +%s) ))
+        fi
+        echo "$left"
+        ;;
+    *) die 12 "usage: allow <minutes> | revoke | status" ;;
+esac

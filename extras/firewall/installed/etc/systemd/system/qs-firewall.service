@@ -1,0 +1,14 @@
+[Unit]
+Description=Quickshell firewall (nftables table inet qs_firewall)
+Wants=network-pre.target
+Before=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/nft -f /etc/qs-firewall.nft
+ExecReload=/usr/bin/nft -f /etc/qs-firewall.nft
+ExecStop=/usr/bin/nft delete table inet qs_firewall
+
+[Install]
+WantedBy=multi-user.target

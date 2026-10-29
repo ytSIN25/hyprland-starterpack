@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Starter Pack Guide</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --surface: #ffffff;
+    --surface-2: #eef0f6;
+    --border: #dde1ea;
+    --fg: #1b1f27;
+    --fg-dim: #4d5563;
+    --fg-muted: #7a8291;
+    --accent: #6d5bd0;
+    --accent-2: #3d7bd9;
+    --accent-soft: #ece9fb;
+    --kbd-bg: #ffffff;
+    --kbd-border: #c9cedb;
+    --code-bg: #f0f2f7;
+    --warn: #a86400;
+    --warn-soft: #fff4e2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1419;
+      --surface: #161c24;
+      --surface-2: #1d2430;
+      --border: #2a3342;
+      --fg: #ebedf0;
+      --fg-dim: #b0b6bf;
+      --fg-muted: #7b838f;
+      --accent: #a99af0;
+      --accent-2: #86afea;
+      --accent-soft: #241f3d;
+      --kbd-bg: #222a35;
+      --kbd-border: #3a4555;
+      --code-bg: #121820;
+      --warn: #f0b45a;
+      --warn-soft: #2b2212;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1419;
+    --surface: #161c24;
+    --surface-2: #1d2430;
+    --border: #2a3342;
+    --fg: #ebedf0;
+    --fg-dim: #b0b6bf;
+    --fg-muted: #7b838f;
+    --accent: #a99af0;
+    --accent-2: #86afea;
+    --accent-soft: #241f3d;
+    --kbd-bg: #222a35;
+    --kbd-border: #3a4555;
+    --code-bg: #121820;
+    --warn: #f0b45a;
+    --warn-soft: #2b2212;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.6 "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  code, kbd, pre { font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", ui-monospace, monospace; }
+
+  /* top bar */
+  header.top {
+    position: sticky; top: 0; z-index: 10;
+    background: color-mix(in srgb, var(--bg) 85%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .top-inner {
+    max-width: 1080px; margin: 0 auto; padding: 10px 16px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .brand { font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
+  .brand span { color: var(--accent); }
+  nav.links { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; flex: 1; }
+  nav.links::-webkit-scrollbar { display: none; }
+  nav.links a {
+    color: var(--fg-dim); text-decoration: none; font-size: 14px;
+    padding: 6px 10px; border-radius: 8px; white-space: nowrap;
+  }
+  nav.links a:hover { background: var(--surface-2); color: var(--fg); }
+  .theme-btn {
+    border: 1px solid var(--border); background: var(--surface); color: var(--fg-dim);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit; font-size: 13px;
+  }
+
+  main { max-width: 1080px; margin: 0 auto; padding: 0 16px 80px; }
+
+  .hero { padding: 48px 0 24px; }
+  .hero h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 0 0 12px; letter-spacing: -0.02em; }
+  .hero p { color: var(--fg-dim); max-width: 680px; margin: 0; font-size: 17px; }
+  .quick {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px; margin-top: 28px;
+  }
+  .quick div {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
+  }
+  .quick b { display: block; font-size: 13px; color: var(--fg-muted); font-weight: 500; margin-bottom: 6px; }
+
+  section { padding-top: 40px; }
+  h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 + .lead { color: var(--fg-dim); margin: 0 0 20px; }
+  h3 { font-size: 16px; margin: 24px 0 8px; }
+
+  kbd {
+    display: inline-block; min-width: 1.6em; text-align: center;
+    padding: 1px 7px; font-size: 12.5px; line-height: 1.6;
+    background: var(--kbd-bg); color: var(--fg);
+    border: 1px solid var(--kbd-border); border-bottom-width: 2px; border-radius: 6px;
+  }
+  .plus { color: var(--fg-muted); margin: 0 3px; font-size: 12px; }
+
+  /* keybinds */
+  .kb-tools { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .kb-tools input {
+    flex: 1; min-width: 200px; font: inherit; color: var(--fg);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px;
+  }
+  .kb-tools input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .kb-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .kb-group { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .kb-group h3 { margin: 0; padding: 12px 16px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); border-bottom: 1px solid var(--border); }
+  .kb-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid var(--border); }
+  .kb-row:last-child { border-bottom: 0; }
+  .kb-row .act { color: var(--fg-dim); font-size: 14px; }
+  .kb-row .keys { white-space: nowrap; flex-shrink: 0; }
+  .kb-empty { color: var(--fg-muted); display: none; padding: 12px 0; }
+
+  /* cards + code */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; margin: 14px 0; }
+  .card > :first-child { margin-top: 0; }
+  .card > :last-child { margin-bottom: 0; }
+  .steps { counter-reset: s; list-style: none; padding: 0; margin: 0; }
+  .steps > li { counter-increment: s; position: relative; padding-left: 40px; margin: 0 0 18px; }
+  .steps > li::before {
+    content: counter(s); position: absolute; left: 0; top: 0;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 13px; font-weight: 600;
+    background: var(--accent-soft); color: var(--accent);
+  }
+  .steps > li:last-child { margin-bottom: 0; }
+  p code, li code, td code {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 5px;
+    padding: 1px 5px; font-size: 13px; overflow-wrap: anywhere;
+  }
+  .code { position: relative; margin: 10px 0; }
+  .code pre {
+    margin: 0; background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.55;
+  }
+  .code .copy {
+    position: absolute; top: 8px; right: 8px;
+    font: inherit; font-size: 12px; color: var(--fg-dim);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; cursor: pointer;
+    opacity: 0; transition: opacity .15s;
+  }
+  .code:hover .copy, .code .copy:focus { opacity: 1; }
+  .c { color: var(--fg-muted); }
+  .s { color: var(--accent-2); }
+  .k { color: var(--accent); }
+
+  .note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 12px 0; color: var(--fg); }
+  .warn { border-left-color: var(--warn); background: var(--warn-soft); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--fg-muted); font-weight: 500; font-size: 13px; }
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+
+  /* laptop brands */
+  .brands { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .brand-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; }
+  .brand-card h3 { margin: 0 0 4px; font-size: 17px; }
+  .brand-card .for { color: var(--fg-muted); font-size: 13px; margin: 0 0 12px; }
+  .brand-card ul { margin: 0 0 12px; padding-left: 18px; color: var(--fg-dim); font-size: 14px; }
+  .brand-card li { margin: 3px 0; }
+  .brand-card .code { margin-top: auto; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 99px; background: var(--surface-2); color: var(--fg-muted); margin-left: 6px; vertical-align: middle; font-weight: 500; }
+
+  footer { color: var(--fg-muted); font-size: 13px; text-align: center; padding: 40px 16px; }
+
+  @media (max-width: 600px) {
+    .kb-grid, .brands { grid-template-columns: 1fr; }
+    .kb-row { flex-wrap: wrap; }
+    .code .copy { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">Starter<span>Pack</span></div>
+    <nav class="links">
+      <a href="#keybinds">Keybinds</a>
+      <a href="#change-keybinds">Change keybinds</a>
+      <a href="#wallpaper">Wallpaper</a>
+      <a href="#laptops">Laptop extras</a>
+      <a href="#files">Files</a>
+      <a href="#help">Troubleshooting</a>
+    </nav>
+    <button class="theme-btn" id="themeBtn" type="button">Theme</button>
+  </div>
+</header>
+
+<main>
+
+<div class="hero">
+  <h1>Your Hyprland desktop is installed.</h1>
+  <p>Everything you need to get around: the keyboard shortcuts, how to change them, how to swap wallpapers, and extra packages for your laptop brand.</p>
+  <div class="quick">
+    <div><b>Open a terminal</b><kbd>Super</kbd><span class="plus">+</span><kbd>Q</kbd></div>
+    <div><b>App launcher</b><kbd>Super</kbd><span class="plus">+</span><kbd>D</kbd></div>
+    <div><b>Change wallpaper</b><kbd>Super</kbd><span class="plus">+</span><kbd>W</kbd></div>
+    <div><b>Close a window</b><kbd>Super</kbd><span class="plus">+</span><kbd>C</kbd></div>
+  </div>
+</div>
+
+<!-- ======================================================= -->
+<section id="keybinds">
+  <h2>Keybinds</h2>
+  <p class="lead"><kbd>Super</kbd> is the Windows key. Type below to filter.</p>
+
+  <div class="kb-tools">
+    <input id="kbFilter" type="search" placeholder="Filter, e.g. screenshot, workspace, W…" aria-label="Filter keybinds">
+  </div>
+
+  <div class="kb-grid" id="kbGrid"></div>
+  <p class="kb-empty" id="kbEmpty">No keybind matches that.</p>
+</section>
+
+<!-- ======================================================= -->
+<section id="change-keybinds">
+  <h2>Change keybinds</h2>
+  <p class="lead">All keybinds live in one file. Hyprland reloads it as soon as you save.</p>
+
+  <div class="card">
+    <ol class="steps">
+      <li>
+        Open the binds file in any editor:
+        <div class="code"><pre>nano ~/.config/hypr/modules/binds.lua</pre></div>
+      </li>
+      <li>
+        Find the line for the shortcut you want to change and edit the key part. Each bind has the form
+        <code>hl.bind("KEYS", action)</code>. For example, to open the terminal with <kbd>Super</kbd><span class="plus">+</span><kbd>Enter</kbd> instead of <kbd>Super</kbd><span class="plus">+</span><kbd>Q</kbd>:
+        <div class="code"><pre><span class="c">-- before</span>
+hl.bind(mainMod .. <span class="s">" + Q"</span>, hl.dsp.exec_cmd(terminal))
+<span class="c">-- after</span>
+hl.bind(mainMod .. <span class="s">" + RETURN"</span>, hl.dsp.exec_cmd(terminal))</pre></div>
+      </li>
+      <li>
+        Save. If nothing happens, reload by hand and check for errors:
+        <div class="code"><pre>hyprctl reload
+hyprctl configerrors</pre></div>
+      </li>
+    </ol>
+  </div>
+
+  <h3>Add a new shortcut</h3>
+  <p>Add a line anywhere in <code>binds.lua</code>. Some patterns you can copy:</p>
+  <div class="code"><pre><span class="c">-- Launch an app</span>
+hl.bind(mainMod .. <span class="s">" + E"</span>, hl.dsp.exec_cmd(<span class="s">"firefox"</span>))
+
+<span class="c">-- Two modifiers</span>
+hl.bind(mainMod .. <span class="s">" + SHIFT + E"</span>, hl.dsp.exec_cmd(<span class="s">"code"</span>))
+
+<span class="c">-- Works on the lock screen and repeats while held (good for media keys)</span>
+hl.bind(<span class="s">"XF86AudioRaiseVolume"</span>, hl.dsp.exec_cmd(<span class="s">"wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"</span>),
+        { locked = <span class="k">true</span>, repeating = <span class="k">true</span> })
+
+<span class="c">-- Open a Quickshell panel</span>
+hl.bind(mainMod .. <span class="s">" + I"</span>, hl.dsp.exec_cmd(<span class="s">"qs ipc call panel settings"</span>))</pre></div>
+
+  <h3>Useful pieces</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>What</th><th>How</th></tr>
+      <tr><td>Change the main modifier for every bind</td><td><code>local mainMod = "SUPER"</code> → <code>"ALT"</code> at the top of <code>binds.lua</code></td></tr>
+      <tr><td>Change the default terminal</td><td><code>local terminal = "kitty"</code> at the top of <code>binds.lua</code></td></tr>
+      <tr><td>Find a key's name</td><td>Run <code>wev</code> (<code>sudo pacman -S wev</code>) and press the key; use the <code>sym</code> name</td></tr>
+      <tr><td>Remove a bind</td><td>Put <code>--</code> in front of the line to comment it out</td></tr>
+      <tr><td>Panels you can bind</td><td><code>qs ipc call panel</code> + <code>controlcenter</code>, <code>notifications</code>, <code>clipboard</code>, <code>dashboard</code>, <code>sysmon</code>, <code>settings</code>, <code>capture</code>, <code>record</code>, <code>dnd</code>, <code>caffeine</code></td></tr>
+      <tr><td>Keyboard layout (e.g. German)</td><td><code>kb_layout = "de"</code> in <code>~/.config/hypr/modules/input.lua</code></td></tr>
+      <tr><td>Full reference</td><td><a href="https://wiki.hypr.land/Configuring/Basics/Binds/">wiki.hypr.land → Binds</a></td></tr>
+    </table>
+  </div>
+  <p class="note">A key can only do one thing. If a new bind seems ignored, search <code>binds.lua</code> for the same key combination: there may already be a line using it further down.</p>
+</section>
+
+<!-- ======================================================= -->
+<section id="wallpaper">
+  <h2>Change wallpaper</h2>
+  <p class="lead">Images (<code>.png</code>, <code>.jpg</code>, <code>.gif</code>) and videos (<code>.mp4</code>) both work. Picking a wallpaper also recolors the bar, launcher, and terminal to match it.</p>
+
+  <div class="card">
+    <h3>The picker <span class="tag">easiest</span></h3>
+    <ol class="steps">
+      <li>Press <kbd>Super</kbd><span class="plus">+</span><kbd>W</kbd>. A carousel of your wallpapers opens.</li>
+      <li>Scroll or use the arrow keys, then click or press <kbd>Enter</kbd> to apply. <kbd>Esc</kbd> closes it.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h3>Add your own wallpapers</h3>
+    <p>Copy files into either folder. The picker finds them on its next open:</p>
+    <div class="code"><pre>~/.config/wallpapers/
+~/Pictures/Wallpapers/</pre></div>
+    <div class="code"><pre>cp ~/Downloads/my-wallpaper.jpg ~/Pictures/Wallpapers/</pre></div>
+  </div>
+
+  <div class="card">
+    <h3>From the terminal or a script</h3>
+    <div class="code"><pre>qs ipc call wallpaper set ~/Pictures/Wallpapers/my-wallpaper.jpg
+qs ipc call wallpaper get</pre></div>
+  </div>
+
+  <div class="card">
+    <h3>Auto-rotate, transitions</h3>
+    <p>Open Settings from the bar (or <code>qs ipc call panel settings</code>) → <b>Wallpaper</b>. Set a rotation interval in minutes, random or in order, and the transition type and speed.</p>
+  </div>
+
+  <div class="card">
+    <h3>Lock screen and login screen</h3>
+    <p><b>Lock screen</b> (<kbd>Super</kbd><span class="plus">+</span><kbd>L</kbd>): edit the <code>path =</code> line under <code>background</code> in <code>~/.config/hypr/hyprlock.conf</code>. The round picture under the clock is <code>~/.face</code>; replace that file to change it.</p>
+    <p><b>Login screen</b> (only if you said yes to SDDM during install): press <kbd>Super</kbd><span class="plus">+</span><kbd>Shift</kbd><span class="plus">+</span><kbd>W</kbd> and pick a wallpaper. If you skipped it, install it any time:</p>
+    <div class="code"><pre>sudo pacman -S --needed sddm qt6-declarative
+sudo ~/.config/sddm-launcher/install.sh
+sudo systemctl enable sddm</pre></div>
+  </div>
+</section>
+
+<!-- ======================================================= -->
+<section id="laptops">
+  <h2>Optional extras for your laptop</h2>
+  <p class="lead">The base install works on any machine. These packages add brand-specific controls: fan curves, battery charge limits, keyboard lighting, GPU switching. Install only the one for your laptop.</p>
+
+  <p class="note">You can re-run the installer just for these: <code>./install.sh --no-packages</code> skips the base packages, and <code>./install.sh --brand asus</code> adds the extras for one brand. Or copy the commands below. Packages marked <span class="tag">AUR</span> install with <code>yay</code>, which the installer set up for you.</p>
+
+  <h3>Every laptop</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Package</th><th>What it does</th></tr>
+      <tr><td><code>sof-firmware</code></td><td>Speakers and microphone on most laptops from 2019 on. Installed by default.</td></tr>
+      <tr><td><code>fprintd</code></td><td>Fingerprint reader. Enroll with <code>fprintd-enroll</code>.</td></tr>
+      <tr><td><code>iio-sensor-proxy</code></td><td>Auto-rotate and ambient light sensor on 2-in-1s.</td></tr>
+      <tr><td><code>thermald</code></td><td>Keeps Intel CPUs from overheating and throttling hard. Intel only.</td></tr>
+      <tr><td><code>intel-media-driver</code> / <code>libva-mesa-driver</code></td><td>Hardware video decoding (Intel / AMD), so videos and video wallpapers use less battery.</td></tr>
+    </table>
+  </div>
+
+  <h3>By brand</h3>
+  <div class="brands">
+
+    <div class="brand-card">
+      <h3>ASUS</h3>
+      <p class="for">ROG, TUF, Zephyrus, Strix, Flow</p>
+      <ul>
+        <li><code>asusctl</code>: keyboard RGB, fan curves, battery limit, power modes</li>
+        <li><code>rog-control-center</code>: a GUI for all of the above</li>
+        <li><code>supergfxctl</code> <span class="tag">AUR</span>: switch GPU mode (Integrated / Hybrid)</li>
+        <li>Stop at 80% to protect the battery: <code>asusctl -c 80</code></li>
+        <li>Keys lagging or sticking? <code>sudo systemctl restart asusd</code></li>
+      </ul>
+      <div class="code"><pre>sudo pacman -S asusctl rog-control-center
+yay -S supergfxctl
+sudo systemctl enable --now supergfxd</pre></div>
+    </div>
+
+    <div class="brand-card">
+      <h3>Lenovo Legion</h3>
+      <p class="for">Legion 5 / 7 / Pro, LOQ</p>
+      <ul>
+        <li><code>lenovolegionlinux</code> <span class="tag">AUR</span>: fan curves, power mode (<kbd>Fn</kbd><span class="plus">+</span><kbd>Q</kbd>), battery conservation</li>
+        <li>Then connect it to the bar's battery panel (fan curve + Performance mode) with the included script</li>
+      </ul>
+      <div class="code"><pre>sudo pacman -S linux-headers
+yay -S lenovolegionlinux-dkms-git lenovolegionlinux-git
+sudo bash ~/.config/quickshell/scripts/setup-fan-power.sh</pre></div>
+    </div>
+
+    <div class="brand-card">
+      <h3>Lenovo ThinkPad / IdeaPad</h3>
+      <p class="for">T, X, P, E series, IdeaPad, Yoga</p>
+      <ul>
+        <li><code>acpi_call-dkms</code>: battery charge thresholds on older ThinkPads</li>
+        <li><code>tlp</code>: deeper battery tuning. <b>Conflicts with</b> <code>power-profiles-daemon</code>; the bar's power-mode button needs the latter, so pick one</li>
+        <li><code>thinkfan</code> <span class="tag">AUR</span>: custom fan control (needs a config)</li>
+        <li>IdeaPad battery conservation (stops at ~60–80%):</li>
+      </ul>
+      <div class="code"><pre>sudo pacman -S acpi_call-dkms fprintd linux-headers
+<span class="c"># IdeaPad: 1 = on, 0 = off</span>
+echo 1 | sudo tee /sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/conservation_mode</pre></div>
+    </div>
+
+    <div class="brand-card">
+      <h3>Framework</h3>
+      <p class="for">Laptop 13 / 16, Laptop 12</p>
+      <ul>
+        <li><code>framework-system</code>: battery charge limit, LEDs, firmware info</li>
+        <li><code>fprintd</code>: the power-button fingerprint reader</li>
+        <li><code>iio-sensor-proxy</code>: ambient light sensor</li>
+        <li>Charge limit: <code>sudo framework_tool --charge-limit 80</code></li>
+      </ul>
+      <div class="code"><pre>sudo pacman -S framework-system fprintd iio-sensor-proxy</pre></div>
+    </div>
+
+    <div class="brand-card">
+      <h3>Dell</h3>
+      <p class="for">XPS, Latitude, Inspiron, Alienware</p>
+      <ul>
+        <li><code>thermald</code>: better thermals on Intel models</li>
+        <li><code>dell-command-configure</code> <span class="tag">AUR</span>: BIOS settings from Linux, including battery charge mode</li>
+        <li>Charge limit: <code>sudo cctk --PrimaryBattChargeCfg=Custom:50-80</code></li>
+      </ul>
+      <div class="code"><pre>sudo pacman -S thermald
+sudo systemctl enable --now thermald
+yay -S dell-command-configure</pre></div>
+    </div>
+
+    <div class="brand-card">
+      <h3>MSI</h3>
+      <p class="for">GF, GS, Katana, Stealth, Raider</p>
+      <ul>
+        <li><code>isw</code> <span class="tag">AUR</span>: fan control and Cooler Boost through the embedded controller</li>
+        <li>Needs <code>ec_sys</code> write support: add <code>ec_sys.write_support=1</code> to your kernel parameters</li>
+      </ul>
+      <div class="code"><pre>yay -S isw</pre></div>
+    </div>
+
+    <div class="brand-card">
+      <h3>Acer &amp; others</h3>
+      <p class="for">Nitro, Predator, Aspire, HP, Huawei…</p>
+      <ul>
+        <li><code>nbfc-linux</code> <span class="tag">AUR</span>: notebook fan control with ready-made profiles for hundreds of models</li>
+        <li>Find your model's profile with <code>sudo nbfc config -r</code></li>
+      </ul>
+      <div class="code"><pre>yay -S nbfc-linux
+sudo nbfc config -r
+sudo systemctl enable --now nbfc_service</pre></div>
+    </div>
+
+    <div class="brand-card">
+      <h3>Any laptop with an NVIDIA GPU</h3>
+      <p class="for">Intel/AMD + NVIDIA hybrid graphics</p>
+      <ul>
+        <li><code>nvidia-open-dkms</code>: the driver (RTX 20-series and newer)</li>
+        <li><code>nvidia-prime</code>: run one app on the NVIDIA GPU with <code>prime-run app</code></li>
+        <li>The bar's GPU button can also send apps to the NVIDIA GPU</li>
+        <li><code>envycontrol</code> <span class="tag">AUR</span>: turn the NVIDIA GPU fully off for battery life</li>
+      </ul>
+      <div class="code"><pre>sudo pacman -S nvidia-open-dkms nvidia-utils nvidia-prime linux-headers
+<span class="c"># reboot afterwards</span></pre></div>
+    </div>
+
+  </div>
+  <p class="note warn">If you use <code>linux-lts</code> or <code>linux-zen</code> instead of the default kernel, install the matching headers (<code>linux-lts-headers</code>, <code>linux-zen-headers</code>) for anything ending in <code>-dkms</code>.</p>
+</section>
+
+<!-- ======================================================= -->
+<section id="files">
+  <h2>Where things are</h2>
+  <p class="lead">Your old configs were moved, not deleted: look in <code>~/.config/starterpack-backup-&lt;date&gt;/</code>.</p>
+  <div class="table-wrap">
+    <table>
+      <tr><th>What</th><th>File</th></tr>
+      <tr><td>Keybinds</td><td><code>~/.config/hypr/modules/binds.lua</code></td></tr>
+      <tr><td>Apps started on login</td><td><code>~/.config/hypr/modules/autostart.lua</code></td></tr>
+      <tr><td>Monitors, resolution, scaling</td><td><code>~/.config/hypr/modules/monitors.lua</code> (or Settings → Displays in the bar)</td></tr>
+      <tr><td>Keyboard layout, touchpad, gestures</td><td><code>~/.config/hypr/modules/input.lua</code></td></tr>
+      <tr><td>Gaps, borders, blur, animations</td><td><code>~/.config/hypr/modules/decorations.lua</code>, <code>layout.lua</code></td></tr>
+      <tr><td>Window rules</td><td><code>~/.config/hypr/modules/windowrules.lua</code></td></tr>
+      <tr><td>Lock screen / idle timers</td><td><code>~/.config/hypr/hyprlock.conf</code>, <code>hypridle.conf</code></td></tr>
+      <tr><td>Bar, panels, themes</td><td><code>~/.config/quickshell/</code> (most options are in the Settings panel)</td></tr>
+      <tr><td>App launcher</td><td><code>~/.config/rofi/type-2/</code></td></tr>
+      <tr><td>Terminal / shell prompt</td><td><code>~/.config/kitty/kitty.conf</code>, <code>~/.config/fish/config.fish</code>, <code>~/.config/starship.toml</code></td></tr>
+      <tr><td>Wallpapers</td><td><code>~/.config/wallpapers/</code>, <code>~/Pictures/Wallpapers/</code></td></tr>
+      <tr><td>This guide and the optional extras</td><td><code>~/.config/starterpack/</code></td></tr>
+    </table>
+  </div>
+
+  <h3>Advanced extras (not installed by default)</h3>
+  <p>These are in <code>~/.config/starterpack/extras/</code>. Read the files before running them.</p>
+  <ul>
+    <li><b>firewall/</b>: an nftables firewall you can toggle from the bar. Installs system rules and a polkit rule, so it needs <code>sudo</code>.</li>
+    <li><b>workstation-mode/</b>: an overview that shrinks the current window and shows the others as cards. See its <code>INSTALL.md</code>.</li>
+    <li><b>legacy/</b>: Waybar and SwayNC configs, if you prefer them to Quickshell.</li>
+  </ul>
+</section>
+
+<!-- ======================================================= -->
+<section id="help">
+  <h2>Troubleshooting</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Problem</th><th>Fix</th></tr>
+      <tr><td>The bar disappeared</td><td>Press <kbd>Super</kbd><span class="plus">+</span><kbd>R</kbd> (it starts the bar if it is not running), or run <code>quickshell &amp;</code></td></tr>
+      <tr><td>Red error box at the top of the screen</td><td>A typo in a config file. <code>hyprctl configerrors</code> shows where.</td></tr>
+      <tr><td>Blurry Steam / Electron apps on a HiDPI screen</td><td>Start the app in Wayland mode (Electron: <code>--ozone-platform=wayland</code>), or turn on XWayland zero-scaling in <code>misc.lua</code> and give the app its own scale (Steam: <code>STEAM_FORCE_DESKTOPUI_SCALING</code>)</td></tr>
+      <tr><td>No sound</td><td><code>systemctl --user restart pipewire wireplumber</code>; check that <code>sof-firmware</code> is installed</td></tr>
+      <tr><td>Can't type Chinese / Japanese / Korean</td><td>Run <code>fcitx5-configtool</code> and add an input method (<code>fcitx5-chinese-addons</code>, <code>fcitx5-mozc</code>, <code>fcitx5-hangul</code>)</td></tr>
+      <tr><td>No screensaver after 2 minutes idle</td><td>It needs <code>ttfx</code> from the AUR: <code>yay -S ttfx</code>. The lock screen works without it.</td></tr>
+      <tr><td>Want your old setup back</td><td>Copy the folders back from <code>~/.config/starterpack-backup-&lt;date&gt;/</code></td></tr>
+    </table>
+  </div>
+</section>
+
+</main>
+
+<footer>Open this page again any time: <code>xdg-open ~/.config/starterpack/guide.html</code></footer>
+
+<script>
+// Keybinds, mirrored from ~/.config/hypr/modules/binds.lua
+const KEYBINDS = [
+  { group: "Apps & launchers", items: [
+    ["Terminal (kitty)", "Super+Q"],
+    ["App launcher", "Super+D"],
+    ["File manager (Nautilus)", "Super+F"],
+    ["Task manager (btop)", "Ctrl+Shift+Esc"],
+    ["Power menu", "Power button"],
+  ]},
+  { group: "Windows", items: [
+    ["Close window", "Super+C"],
+    ["Toggle floating", "Super+B"],
+    ["Fullscreen (hides the bar)", "Super+V"],
+    ["Pseudo-tile", "Super+P"],
+    ["Toggle split direction", "Super+J"],
+    ["Move focus", "Super+← → ↑ ↓"],
+    ["Move window", "Super+Left mouse drag"],
+    ["Resize window", "Super+Right mouse drag"],
+  ]},
+  { group: "Workspaces", items: [
+    ["Go to workspace 1–10", "Super+1…0"],
+    ["Move window to workspace 1–10", "Super+Shift+1…0"],
+    ["Next / previous workspace", "Super+Scroll"],
+    ["Switch workspace (touchpad)", "3-finger swipe ←→"],
+    ["Show / hide scratchpad", "Super+S"],
+    ["Send window to scratchpad", "Super+Shift+S"],
+  ]},
+  { group: "Desktop & panels", items: [
+    ["Wallpaper + theme picker", "Super+W"],
+    ["Login screen wallpaper", "Super+Shift+W"],
+    ["Notifications", "Super+N"],
+    ["Clipboard history", "Super+A"],
+    ["Show hidden bar icons", "Super+Shift+D"],
+    ["Restart / toggle the bar", "Super+R"],
+    ["Lock screen", "Super+L"],
+  ]},
+  { group: "Screenshots & recording", items: [
+    ["Screenshot a region to clipboard", "Shift+Print"],
+    ["Start / stop region recording", "Super+Shift+R"],
+  ]},
+  { group: "Media keys", items: [
+    ["Volume up / down / mute", "Volume keys"],
+    ["Mic mute", "Mic mute key"],
+    ["Screen brightness", "Brightness keys"],
+    ["Play / pause / next / previous", "Media keys"],
+  ]},
+];
+
+function keysHTML(combo) {
+  return combo.split("+").map(k => `<kbd>${k.trim()}</kbd>`).join('<span class="plus">+</span>');
+}
+
+const grid = document.getElementById("kbGrid");
+for (const g of KEYBINDS) {
+  const box = document.createElement("div");
+  box.className = "kb-group";
+  box.innerHTML = `<h3>${g.group}</h3>` + g.items.map(([act, keys]) =>
+    `<div class="kb-row" data-q="${(act + " " + keys + " " + g.group).toLowerCase()}">
+       <span class="act">${act}</span><span class="keys">${keysHTML(keys)}</span>
+     </div>`).join("");
+  grid.appendChild(box);
+}
+
+const filter = document.getElementById("kbFilter");
+filter.addEventListener("input", () => {
+  const q = filter.value.trim().toLowerCase();
+  let any = false;
+  for (const box of grid.children) {
+    let shown = 0;
+    for (const row of box.querySelectorAll(".kb-row")) {
+      const hit = !q || row.dataset.q.includes(q);
+      row.style.display = hit ? "" : "none";
+      if (hit) shown++;
+    }
+    box.style.display = shown ? "" : "none";
+    if (shown) any = true;
+  }
+  document.getElementById("kbEmpty").style.display = any ? "none" : "block";
+});
+
+// Copy buttons on code blocks
+for (const block of document.querySelectorAll("pre")) {
+  const wrap = block.parentElement.classList.contains("code") ? block.parentElement : null;
+  if (!wrap) continue;
+  const btn = document.createElement("button");
+  btn.className = "copy"; btn.type = "button"; btn.textContent = "Copy";
+  btn.addEventListener("click", async () => {
+    const text = block.innerText.split("\n").filter(l => !l.trim().startsWith("#") && !l.trim().startsWith("--")).join("\n").trim();
+    try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; }
+    catch { btn.textContent = "Select & copy"; }
+    setTimeout(() => btn.textContent = "Copy", 1400);
+  });
+  wrap.appendChild(btn);
+}
+
+// Theme toggle: auto → dark → light
+const root = document.documentElement;
+const btn = document.getElementById("themeBtn");
+const order = ["auto", "dark", "light"];
+function applyTheme(t) {
+  if (t === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", t);
+  btn.textContent = "Theme: " + t;
+}
+let theme = "auto";
+try { theme = localStorage.getItem("sp-theme") || "auto"; } catch {}
+applyTheme(theme);
+btn.addEventListener("click", () => {
+  theme = order[(order.indexOf(theme) + 1) % order.length];
+  applyTheme(theme);
+  try { localStorage.setItem("sp-theme", theme); } catch {}
+});
+</script>
+</body>
+</html>

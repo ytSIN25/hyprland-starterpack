@@ -1,0 +1,3 @@
+word_start=14
+word_end=18
+width=70

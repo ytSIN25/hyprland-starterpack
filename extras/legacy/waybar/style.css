@@ -1,0 +1,171 @@
+/* ~/.config/waybar/style.css */
+/* Colors sampled directly from the reference screenshot:
+   bar bg        #101315
+   module pill   #171d1e
+   pill edge     #24282b
+   text          #c9cdd3
+   accent blue   #7aa2f7
+   accent orange #de6145 (arch logo + notification badge)
+   dim/inactive  #4b4e55
+*/
+
+* {
+    font-family: "JetBrainsMono Nerd Font", "FiraCode Nerd Font", monospace;
+    font-size: 13px;
+    min-height: 0;
+}
+
+window#waybar {
+    background: #101315;
+    border-radius: 10px;
+}
+
+/* --- Base pill styling shared by every module box --- */
+#custom-arch,
+#workspaces,
+#window,
+#tray,
+#clock,
+#group-hardware,
+#group-connectivity,
+#idle_inhibitor,
+#custom-clipboard,
+#custom-notification {
+    background-color: #171d1e;
+    color: #c9cdd3;
+    margin: 4px 3px;
+    padding: 0 10px;
+    border-radius: 8px;
+}
+
+/* --- Arch logo button --- */
+#custom-arch {
+    color: #de6145;
+    font-size: 16px;
+    padding: 0 12px;
+}
+
+#custom-arch:hover {
+    background-color: #24282b;
+}
+
+/* --- Workspaces --- */
+#workspaces {
+    padding: 0 8px;
+}
+
+#workspaces button {
+    color: #4b4e55;
+    background: transparent;
+    padding: 0 6px;
+    border-radius: 6px;
+    font-size: 10px;
+}
+
+#workspaces button.active {
+    color: #101315;
+    background-color: #7aa2f7;
+    font-size: 12px;
+    font-weight: bold;
+    padding: 0 9px;
+}
+
+#workspaces button:hover {
+    color: #7aa2f7;
+}
+
+/* --- Focused window title --- */
+#window {
+    color: #9199a3;
+}
+
+/* --- Tray --- */
+#tray {
+    padding: 0 12px;
+}
+
+#tray > .passive {
+    -gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+    -gtk-icon-effect: highlight;
+    background-color: #de6145;
+}
+
+/* --- Clock --- */
+#clock {
+    color: #c9cdd3;
+    font-weight: 500;
+}
+
+/* --- Hardware group (cpu + memory) ---
+   Targeting the leaf module IDs directly (not nested under the group
+   selector) since the nested form wasn't matching Waybar's actual node
+   tree -- that's why these were rendering with zero gap between them. */
+#cpu,
+#memory {
+    background: transparent;
+    margin: 0;
+    padding: 0 8px;
+}
+
+#cpu {
+    color: #9ece6a;
+}
+
+#memory {
+    color: #e0af68;
+}
+
+/* --- Connectivity group (network + bluetooth + volume) --- */
+#network,
+#bluetooth,
+#pulseaudio {
+    background: transparent;
+    margin: 0;
+    padding: 0 8px;
+}
+
+#network,
+#bluetooth,
+#pulseaudio {
+    color: #7aa2f7;
+}
+
+#network.disconnected {
+    color: #de6145;
+}
+
+/* --- Idle inhibitor toggle --- */
+#idle_inhibitor {
+    color: #c9cdd3;
+}
+
+#idle_inhibitor.activated {
+    color: #7aa2f7;
+}
+
+/* --- Clipboard --- */
+#custom-clipboard {
+    color: #c9cdd3;
+}
+
+#custom-clipboard:hover {
+    background-color: #24282b;
+}
+
+/* --- Notifications with badge --- */
+#custom-notification {
+    color: #7aa2f7;
+}
+
+tooltip {
+    background: #171d1e;
+    border: 1px solid #24282b;
+    border-radius: 8px;
+}
+
+tooltip label {
+    color: #c9cdd3;
+}

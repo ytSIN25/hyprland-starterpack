@@ -1,0 +1,201 @@
+#!/bin/bash
+# Root lock: while anyone is connected remotely (SSH, or a VNC viewer on
+# wayvnc), nobody can become root on this PC.
+#
+# Installed to /usr/local/sbin/qs-remote-guard and called by:
+#   - PAM (sudo, su, su-l) through pam_exec  -> exit 1 = refuse
+#   - qs-remote-watch.service                -> qs-remote-guard --watch
+#       writes /run/qs-remote/state ("clear"/"remote") every second, because
+#       polkit runs without network access and can't look for itself
+#   - polkit (pkexec, run0, systemctl ...)   -> qs-remote-guard --polkit
+#   - the Quickshell firewall panel reads /run/qs-remote/state
+#
+# "Remote" = an established TCP connection from another machine to one of
+# REMOTE_PORTS, or a logind session marked Remote=yes. If that can't be
+# determined, it counts as remote (fail closed).
+#
+# The local user can unlock root for a few minutes from the bar (island →
+# Allow → password, via qs-rootlock-allow); see unlocked() below.
+#
+# The fixed password-less helpers from sudoers (bar toggles) stay usable,
+# since they can only do their one job. Anything that needs your password,
+# or would reuse a password typed earlier, is refused.
+#
+# Refusing new sudo/su isn't enough: a root shell opened before the lock
+# engaged would stay root. So while locked, the watcher also ends every root
+# session a normal user started (sudo, su, run0, doas, pkexec, or a root
+# shell whose parent isn't root) and forgets sudo's cached passwords; see
+# purge_root() below. Each one is logged as "ended ... session".
+
+PATH=/usr/bin
+REMOTE_PORTS="22 5900"   # sshd, wayvnc
+ALLOWED_HELPERS=(
+    /usr/local/bin/quickshell-wazuh
+    /usr/local/sbin/quickshell-fan-curve
+    /usr/local/sbin/qs-fw-block
+    /usr/local/sbin/qs-rootlock-allow
+    "/usr/bin/systemctl start openvpn-client@thm"
+    "/usr/bin/systemctl stop openvpn-client@thm"
+)
+
+# Prints who is connected ("ip:port" / "ssh-session N"); exit 2 if unknown.
+remote_peers() {
+    local out filter="" p
+    for p in $REMOTE_PORTS; do
+        filter+="${filter:+ or }sport = :$p"
+    done
+    out=$(ss -Htn state established "( $filter )" 2>/dev/null) || return 2
+    # 4th column = peer; skip this machine talking to itself
+    awk '{print $4}' <<<"$out" | grep -vE '^$|^(127\.|\[::1\]|\[::ffff:127\.)' || true
+
+    local s
+    for s in $(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
+        [[ $(loginctl show-session "$s" -p Remote --value 2>/dev/null) == yes ]] &&
+            [[ $(loginctl show-session "$s" -p State --value 2>/dev/null) != closing ]] &&
+            echo "ssh-session $s"
+    done
+    return 0
+}
+
+is_remote() {
+    local peers
+    peers=$(remote_peers) || return 0   # can't tell -> treat as remote
+    [[ -n $peers ]]
+}
+
+# Is the sudo that called us (our parent) running one of the allowed helpers?
+caller_is_helper() { pid_is_helper "$PPID"; }
+
+# Is process $1 a sudo running one of the allowed helpers?
+pid_is_helper() {
+    [[ -r /proc/$1/cmdline ]] || return 1
+    local -a argv
+    mapfile -d '' argv < "/proc/$1/cmdline"
+    [[ $(basename -- "${argv[0]}") == sudo ]] || return 1
+    local i=1
+    [[ ${argv[1]} == -n ]] && i=2
+    local cmd="${argv[*]:i}" h
+    for h in "${ALLOWED_HELPERS[@]}"; do
+        # a whole command, or a helper path followed by its arguments
+        [[ $cmd == "$h" || ( $h != *" "* && $cmd == "$h "* ) ]] && return 0
+    done
+    return 1
+}
+
+# ── Ending root sessions while locked ──────────────────────────────────────
+LAUNCHERS='^(sudo|sudo-rs|su|run0|doas|pkexec)$'
+SHELLS='^(bash|sh|dash|zsh|fish|ksh|tcsh|csh|python[0-9.]*|perl|ruby|lua|busybox)$'
+
+# Signal process $1 and everything under it (children first)
+kill_tree() {
+    local pid=$1 sig=$2 c
+    for c in $(ps -o pid= --ppid "$pid" 2>/dev/null); do kill_tree "$c" "$sig"; done
+    kill "-$sig" "$pid" 2>/dev/null
+}
+
+# Real uid of process $1 ("" if it's gone)
+ruid_of() { awk '/^Uid:/{print $2; exit}' "/proc/$1/status" 2>/dev/null; }
+
+# Root sessions started by a normal user: a launcher (sudo, su, ...) whose
+# real uid isn't root, or a root shell/interpreter whose parent isn't root
+# (pkexec bash, a setuid shell). Prints "pid launcher user cmdline".
+root_sessions() {
+    local pid ppid euid comm ruid pruid
+    while read -r pid ppid euid comm; do
+        [[ $pid == "$$" ]] && continue
+        if [[ $comm =~ $LAUNCHERS ]]; then
+            ruid=$(ruid_of "$pid")
+            [[ -n $ruid && $ruid != 0 ]] || continue
+            pid_is_helper "$pid" && continue
+        elif [[ $euid == 0 && $comm =~ $SHELLS ]]; then
+            pruid=$(ruid_of "$ppid")
+            [[ -n $pruid && $pruid != 0 ]] || continue
+            # under a launcher: that launcher gets ended (and logged) already
+            [[ $(cat "/proc/$ppid/comm" 2>/dev/null) =~ $LAUNCHERS ]] && continue
+            ruid=$pruid
+        else
+            continue
+        fi
+        printf '%s %s %s %s\n' "$pid" "$comm" "$(id -nu "$ruid" 2>/dev/null || echo "$ruid")" \
+            "$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | cut -c1-120)"
+    done < <(ps -eo pid=,ppid=,euid=,comm=)
+}
+
+# End them all (HUP, then KILL whatever is left) and log each one
+purge_root() {
+    local list pid comm user cmd
+    list=$(root_sessions)
+    [[ -n $list ]] || return 0
+    while read -r pid comm user cmd; do
+        kill_tree "$pid" HUP
+        logger -t qs-remote-guard -p auth.warning \
+            "ended $comm session (pid $pid) for $user: root lock engaged · $cmd"
+    done <<<"$list"
+    sleep 1
+    while read -r pid _; do
+        [[ -d /proc/$pid ]] && kill_tree "$pid" KILL
+    done <<<"$list"
+}
+
+# Forget sudo's cached passwords (sudo -i again would otherwise need none)
+forget_sudo() { rm -rf /run/sudo/ts/* 2>/dev/null; }
+
+STATE=/run/qs-remote/state
+ALLOW=/run/qs-remote/allow
+
+# Unlocked for a while from the bar (qs-rootlock-allow, after the local user
+# typed their password): a root-owned 644 file holding the expiry epoch.
+unlocked() {
+    [[ -f $ALLOW && ! -L $ALLOW ]] || return 1
+    [[ $(stat -c %u:%a "$ALLOW") == 0:644 ]] || return 1
+    local until
+    until=$(< "$ALLOW")
+    [[ $until =~ ^[0-9]+$ ]] && (( until > $(date +%s) ))
+}
+
+case "$1" in
+    # Lock now / End root shells from the bar (via qs-rootlock-allow revoke)
+    --purge)  forget_sudo; purge_root; exit 0 ;;
+    --check)  unlocked && exit 0; is_remote && exit 1; exit 0 ;;
+    --status) remote_peers; exit $? ;;
+    --watch)
+        mkdir -p -m 755 /run/qs-remote
+        was_locked=0
+        while :; do
+            if is_remote; then s=remote; else s=clear; fi
+            echo "$s" > "$STATE.tmp" && chmod 644 "$STATE.tmp" && mv -f "$STATE.tmp" "$STATE"
+            # Locked = someone connected and no unlock from the bar. While
+            # locked, no root session survives (also ones started earlier).
+            if [[ $s == remote ]] && ! unlocked; then
+                (( was_locked )) || forget_sudo
+                purge_root
+                was_locked=1
+            else
+                was_locked=0
+            fi
+            sleep 1
+        done ;;
+    --polkit)
+        unlocked && exit 0
+        # Missing, stale (watcher dead) or "remote" -> locked
+        [[ -r $STATE ]] || exit 1
+        (( $(date +%s) - $(stat -c %Y "$STATE") <= 5 )) || exit 1
+        [[ $(< "$STATE") == clear ]] && exit 0
+        exit 1 ;;
+esac
+
+# Called from PAM. Root is already root (e.g. system jobs running su).
+[[ $PAM_RUSER == root ]] && exit 0
+is_remote || exit 0
+if unlocked; then
+    logger -t qs-remote-guard -p auth.notice \
+        "allowed $PAM_SERVICE ($PAM_TYPE) for ${PAM_RUSER:-$PAM_USER}: root unlocked from the bar"
+    exit 0
+fi
+if [[ $PAM_TYPE == account && $PAM_SERVICE == sudo ]] && caller_is_helper; then
+    exit 0
+fi
+logger -t qs-remote-guard -p auth.warning \
+    "refused $PAM_SERVICE ($PAM_TYPE) for ${PAM_RUSER:-$PAM_USER}: remote connection active"
+[[ $PAM_TYPE == auth ]] && echo "Root is locked while someone is connected remotely (SSH/VNC)."
+exit 1
